@@ -1,0 +1,1724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crystal Dream II — Field Notes</title>
+<meta name="description" content="A reverse-engineering field guide to Triton's 1993 MS-DOS demo Crystal Dream II, with an interactive browser look-alike and an annotated tour of routines checked byte-for-byte against the binary.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2305070a'/%3E%3Ctext x='6' y='45' font-family='Arial Black,Arial' font-size='34' font-weight='900' fill='%23ece9e2'%3ECD%3C/text%3E%3Ctext x='46' y='45' font-family='Arial Black,Arial' font-size='34' font-weight='900' fill='%23f25ca2'%3E2%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+
+<div class="noise" aria-hidden="true"></div>
+
+<header class="site-head">
+  <a class="brand" href="#top">
+    <span class="brand-mark">CD<span>2</span></span>
+    <span class="brand-text">/ FIELD NOTES</span>
+  </a>
+  <button class="nav-toggle" id="navToggle" type="button" aria-expanded="false" aria-controls="siteNav">Sections</button>
+  <nav class="site-nav" id="siteNav" aria-label="Sections">
+    <a href="#demo">The demo</a>
+    <a href="#file">The file</a>
+    <a href="#loader">The loader</a>
+    <a href="#archive">The archive</a>
+    <a href="#asm">The code</a>
+    <a href="#recreation">Recreation</a>
+    <a href="#words">Their words</a>
+  </nav>
+  <a class="head-cta" href="#recreation">Run it <span aria-hidden="true">↘</span></a>
+</header>
+
+<main id="top">
+
+<!-- ============================== HERO ============================== -->
+<section class="hero" id="hero">
+  <canvas id="heroCanvas" width="640" height="400" aria-hidden="true"></canvas>
+  <div class="hero-scan" aria-hidden="true"></div>
+  <div class="hero-inner">
+    <p class="eyebrow"><span class="dot"></span> MS-DOS · 1993 · TRITON · 1st at The Computer Crossroads</p>
+    <h1 class="hero-title">
+      <span class="line line-a">CRYSTAL</span>
+      <span class="line line-b">DREAM <em>II</em></span>
+    </h1>
+    <p class="hero-sub">A 3.1&nbsp;MB DOS demo: unpacked, every embedded file decoded, the authors’ own texts read — and re-imagined in a browser tab.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="#recreation"><span class="btn-play" aria-hidden="true">▶</span> Run the recreation</a>
+      <a class="btn btn-ghost" href="#file">Read the teardown</a>
+    </div>
+    <dl class="hero-stats">
+      <div><dt>Released</dt><dd>30 May 1993</dd></div>
+      <div><dt>On disk</dt><dd>3,154,579 bytes</dd></div>
+      <div><dt>Unpacked</dt><dd>≈319,744 bytes</dd></div>
+      <div><dt>Runtime</dt><dd>Protected mode, “NOT under DPMI”</dd></div>
+    </dl>
+  </div>
+  <div class="hero-foot">
+    <span>Scroll to disassemble</span>
+    <span class="scroll-line" aria-hidden="true"></span>
+  </div>
+</section>
+
+<!-- ============================== INTRO ============================== -->
+<section class="section intro" id="demo">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">01 / The production</p>
+      <h2>A Pascal program with assembly inner loops.</h2>
+    </div>
+
+    <div class="two-col">
+      <div class="prose">
+        <p class="lede">On 30&nbsp;May 1993 the Swedish group <strong>Triton</strong> released <em>Crystal Dream II</em> for MS-DOS. It took 1st place in the PC demo competition at <em>The Computer Crossroads 1993</em> (<a href="https://demozoo.org/productions/175/" target="_blank" rel="noopener">Demozoo</a>, <a href="https://www.pouet.net/prod.php?which=462" target="_blank" rel="noopener">pouët</a>).</p>
+        <p>The authors’ own <em>Comments</em> page lists the show in order: a setup screen, an intro with a built-in performance tester, a vector scroller, objects and a “spacecut” (polygon intersection), a plasma, a fractal zoom, vectorslime, a tunnel flight, four raytraced pictures, an Earth made of 264 textured polygons, a chessboard (1,837 coordinates, 1,628 polygons, one moving light) and the endpart. The page below plays them in that order.</p>
+        <p>The demo says what it is made of: <em>“programmed in Borland Pascal 7.0 (Assembler of coz) and the sourcecode is 43800 lines long (about 1Mb). The demo runs in protected mode. (NOT under a DPMI server.)”</em> The binary agrees: it carries Borland’s runtime, sets up its own descriptor tables, and refuses to start under a V86 memory manager.</p>
+        <blockquote class="pull">
+          “We didn't buy 486-50Mhz for coding 386 demos.”
+          <cite>— the demo’s own Information page, decoded from CD2.EXE</cite>
+        </blockquote>
+        <p class="fine">Everything technical here was checked against the unpacked image (<code>tools/unpack.py</code>). Every file, text page and 3D object quoted or shown below was decoded from <code>CD2.EXE</code> itself. Private home addresses and phone numbers that the demo prints are deliberately left out.</p>
+      </div>
+
+      <aside class="side-card">
+        <h3>Credits, from the demo’s own page</h3>
+        <ul class="credits">
+          <li><span>Mr.H</span><div>Vectorfilling, music player, fractal zoom, protected-mode interface</div></li>
+          <li><span>Vogue</span><div>Spacecut, vector maths and movement, metamorphing / plasma / slime, “Starwars” scroller, layout and event mixing, both fonts, most objects</div></li>
+          <li><span>Music</span><div>Intro, spacecut, fractal / tunnel flight: <b>Vogue</b>. Chessboard and information viewer: <b>LizardKing</b></div></li>
+          <li><span>Objects</span><div>Some stand-alone objects by <b>Mr.H</b> and <b>Loot</b></div></li>
+          <li><span>Raytraced</span><div>Podium with vase and sphereflake: <b>Mr.H</b>. Toruses and Triton logo: <b>Vogue</b></div></li>
+        </ul>
+        <h3>Module files in the binary</h3>
+        <ul class="tracks">
+          <li>Declogue.mod · AmbPower.mod</li>
+          <li>Desert-D.mod · TrnsAtln.mod <span>(in a <code>lizrdmod</code> folder)</span></li>
+        </ul>
+        <p class="fine">Setup lists: Ultrasound, SoundBlaster, Mono/Stereo LPT 1–2, PC Speaker, Silence; mixing frequencies from 16 to 62&nbsp;kHz.</p>
+      </aside>
+    </div>
+
+    <div class="scene-strip">
+      <figure class="shot">
+        <img src="assets/text-vr.png" alt="Crystal Dream II title text: View the inside of a cube through a magic block" loading="lazy">
+        <figcaption><span>01</span> View the inside of a cube</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="assets/plasma.png" alt="Green and purple plasma screen" loading="lazy">
+        <figcaption><span>02</span> Plasma</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="assets/fractal-2.png" alt="Deep zoom into a fractal" loading="lazy">
+        <figcaption><span>03</span> Fractal zoom</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="assets/torus.png" alt="Raytraced chrome torus on a checkered floor" loading="lazy">
+        <figcaption><span>04</span> Raytraced pictures</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="assets/endpart.png" alt="Crystal Dream II main menu" loading="lazy">
+        <figcaption><span>05</span> Endpart menu</figcaption>
+      </figure>
+    </div>
+    <p class="caption-note">Frames captured from the original binary running in DOSBox 0.74 under Xvfb at 640×400 (320×200 doubled, square pixels). They are shown at 4:3, the shape of the VGA display they were drawn for, so the pixels are slightly taller than they are wide.</p>
+  </div>
+</section>
+
+<!-- ============================== FILE ============================== -->
+<section class="section alt" id="file">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">02 / The file</p>
+      <h2>A normal-looking EXE<br>that is mostly not an EXE.</h2>
+    </div>
+
+    <div class="two-col narrow">
+      <div class="prose">
+        <p><code>CD2.EXE</code> begins with a perfectly ordinary DOS MZ header. Then it does something unreasonable: the header says the entry point is <code>CS:IP = FFF0:0100</code>. DOS adds the load segment to CS and truncates to 16 bits, so CS becomes <code>load − 0x10</code> and the linear address <code>(load − 0x10)·16 + 0x100</code> is exactly <code>load·16</code>: the first byte of the module. It is the same convention as a <code>.COM</code> file (CS = PSP, IP = 0x100), applied to an EXE.</p>
+        <p>The header also declares an image of 79,273 bytes including the 96-byte header (<code>e_cp = 0x9B</code>, 155 blocks of 512 bytes), so DOS loads a 79,177-byte module and stops. The other 3,075,306 bytes are an overlay: a private archive of 58 files that the program reads from itself at runtime (see section 05). The executable is a small unpacker with a very large suitcase.</p>
+        <p>A 588-byte decoder is copied to just below the top of conventional memory (<code>5DBB:0000</code> in my emulation; the segment depends on available memory), where it unpacks a flat image (≈319,744 bytes; last non-zero byte at 0x4E0FF) into memory, patches its relocations, sets up a stack, zeroes every register, and far-returns into the demo. No external decompressor. No DOS extender. No second file.</p>
+      </div>
+      <aside class="side-stack">
+        <div class="mini-stat"><span>MZ header</span><b>0x00 – 0x5F</b><i>96 bytes</i></div>
+        <div class="mini-stat"><span>Loaded module</span><b>0x60 – 0x135A8</b><i>79,177 bytes</i></div>
+        <div class="mini-stat"><span>Overlay blob</span><b>0x135A9 – 0x302292</b><i>3,075,306 bytes</i></div>
+        <div class="mini-stat accent"><span>Unpacked</span><b>≈319,744 bytes</b><i>≈ 4× expansion</i></div>
+      </aside>
+    </div>
+
+    <div class="filebar" role="img" aria-label="File layout: 96-byte header, 79,177-byte loader, 3,075,306-byte overlay">
+      <div class="seg seg-head" style="--w:1.2%"><span>MZ</span></div>
+      <div class="seg seg-load" style="--w:2.5%"><span>LOADER + LZ</span></div>
+      <div class="seg seg-overlay" style="--w:96.3%"><span>OVERLAY / RESOURCES · 3,075,306 BYTES</span></div>
+    </div>
+    <div class="legend">
+      <span><i class="sw sw-head"></i> MZ header · 96 B</span>
+      <span><i class="sw sw-load"></i> Loaded by DOS · 79,177 B</span>
+      <span><i class="sw sw-overlay"></i> Read at runtime · 3,075,306 B</span>
+    </div>
+
+    <div class="table-card">
+      <div class="table-head">
+        <h3>MZ header, annotated</h3>
+        <span class="tag">offset 0x00</span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Field</th><th>Value</th><th>Why it matters</th></tr></thead>
+          <tbody>
+            <tr><td>e_magic</td><td><code>5A4D</code></td><td>"MZ" — DOS will load it as an EXE.</td></tr>
+            <tr><td>e_cblp</td><td><code>0x01A9</code></td><td>Last block is 425 bytes: 154×512 + 425 = 79,273, including the header.</td></tr>
+            <tr><td>e_cp</td><td><code>0x009B</code></td><td>155 blocks. The packed module itself is 79,177 bytes.</td></tr>
+            <tr><td>e_cparhdr</td><td><code>0x0006</code></td><td>Header is 6 paragraphs (0x60 bytes). Code begins at file 0x60.</td></tr>
+            <tr><td>e_minalloc</td><td><code>0x3ABB</code></td><td>DOS must reserve at least 240,560 bytes beyond the loaded image. The initial stack lives in that allocation.</td></tr>
+            <tr><td>e_ss : e_sp</td><td><code>135B:0200</code></td><td>SS·16 = 79,280, 103 bytes past the end of the 79,177-byte module; SP = 0x200 puts the stack in the extra allocation.</td></tr>
+            <tr class="hl"><td>e_cs : e_ip</td><td><code>FFF0:0100</code></td><td>Resolves to <code>load:0000</code> after 16-bit truncation (the .COM convention).</td></tr>
+            <tr><td>e_lfarlc</td><td><code>0x0052</code></td><td>Relocation table offset. One entry (<code>e_crlc = 1</code>) adds the load segment to the word at image offset <code>0x0007</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="note-grid">
+      <div class="note">
+        <h3>What is actually in the overlay?</h3>
+        <p>Strings in the unpacked image name the assets: <code>mainm256.tga</code>, <code>Raytrac1.TGA</code>, <code>TRN-L3.TGA</code>, <code>MEGAFRAC.DAT</code>, <code>Texture2.lbm</code>, <code>Earth3.TVO</code>, <code>shd_cube.tvo</code>, <code>nfly2.tvw</code>. The blob is a custom archive of raytraced stills, textures, fonts, 3D objects and four music modules. Section 05 explains its layout.</p>
+      </div>
+      <div class="note">
+        <h3>Why a generic extractor fails</h3>
+        <p>The overlay has no ZIP, LBM or TGA header at its start, and the file data is XOR-scrambled with a position-dependent term. The directory lives at the <em>end</em> of the EXE, not the beginning. The first 6,254 bytes (a word <code>0x061B</code> and ascending dwords <code>0x154, 0x159, …</code>) are not part of that scheme and remain unexplained.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== LOADER ============================== -->
+<section class="section" id="loader">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">03 / The loader</p>
+      <h2>588 bytes that unpack<br>a 320&nbsp;KB program.</h2>
+    </div>
+
+    <div class="two-col">
+      <div class="prose">
+        <p>The stub is a compact LZ-style unpacker. It first moves the packed image upward with a backwards <code>rep movsw</code>, walking 64&nbsp;KB chunks and adjusting <code>ES</code>/<code>DS</code> between them, then decodes a bitstream where a 0 bit means “literal byte” and a 1 bit starts a match. Lengths and offsets use small variable-length codes backed by lookup tables at <code>CS:020E</code>, <code>0219</code>, <code>0224</code> and <code>0234</code>.</p>
+        <p>At the end of the stream it runs a relocation pass: it reads a list of 16-bit offsets, adds the load segment, and writes the result back. Then it loads <code>SS:SP</code>, pushes the entry <code>CS:IP</code>, zeroes <code>AX BX CX DX BP SI DI</code>, and executes a far return. The unpacked program starts with a completely clean register file, as if DOS had loaded it directly.</p>
+        <p>The only failure path is the string <code>Not enough memory$</code>. Literals are XOR-ed with the bit counter in <code>DL</code> (the <code>xor al,dl</code> below), a cheap scrambling that defeats naive string searches of the packed file. I have not identified the packer; it may well be an off-the-shelf tool rather than Triton’s own code, so I make no claim about who wrote it.</p>
+      </div>
+      <div class="diagram-card">
+        <h3>Loader pipeline</h3>
+        <ol class="pipeline">
+          <li><b>DOS</b><span>loads a 79,177-byte module at <code>load:0000</code></span></li>
+          <li><b>stub</b><span>copies 588 bytes to <code>5DBB:0000</code> (segment varies with free memory)</span></li>
+          <li><b>move</b><span>backwards block copy of the packed image</span></li>
+          <li><b>inflate</b><span>LZ bitstream → ≈319,744 bytes</span></li>
+          <li><b>relocate</b><span>add load segment to every pointer</span></li>
+          <li><b>jump</b><span><code>SS:SP</code>, far return, registers zeroed</span></li>
+        </ol>
+      </div>
+    </div>
+
+    <figure class="code-card feature" data-lang="asm">
+      <figcaption>
+        <div>
+          <span class="code-title">The bit reader at the heart of the unpacker</span>
+          <span class="code-sub">588-byte decoder blob · offsets within the blob · run from 5DBB:0000 in my emulation</span>
+        </div>
+        <button class="copy" type="button" data-copy>Copy</button>
+      </figcaption>
+      <div class="code-body">
+        <pre><code class="asm">; ---- bit reservoir ------------------------------------------------
+; BP holds up to 16 bits; DX is the number of valid bits left.
+; Every test consumes one bit. A new word is fetched only when empty.
+
+003F  AD            lodsw
+0040  95            xchg  ax,bp
+0041  BA 10 00      mov   dx,16
+0044  EB 3A         jmp   .next_bit
+
+.reload:
+0076  AD            lodsw
+0077  95            xchg  ax,bp
+0078  B2 10         mov   dl,16
+007A  72 0B         jc    .match
+
+.literal:
+007C  AC            lodsb
+007D  32 C2         xor   al,dl           ; light obfuscation
+007F  AA            stosb
+
+.next_bit:
+0080  D1 ED         shr   bp,1            ; CF = next bit
+0082  4A            dec   dx
+0083  74 F1         jz    .reload
+0085  73 F5         jnc   .literal        ; 0 = raw byte
+
+.match:
+0087  33 C9         xor   cx,cx           ; 1 = match / length code
+0089  33 DB         xor   bx,bx
+008B  D1 ED         shr   bp,1
+008D  4A            dec   dx
+008E  74 B6         jz    0046
+
+; ---- back-reference ----------------------------------------------
+00F9  AC            lodsb                 ; distance low byte
+00FA  8A D8         mov   bl,al
+00FC  56            push  si
+00FD  8B F7         mov   si,di
+00FF  2B F3         sub   si,bx           ; source = output - distance
+0101  FA            cli
+0102  F3 26 A4      es rep movsb          ; copy match
+0105  FB            sti
+0106  5E            pop   si
+0107  E9 76 FF      jmp   .next_bit</code></pre>
+        <aside class="code-notes">
+          <h4>What to notice</h4>
+          <ul>
+            <li><b>One bit, one branch.</b> The reservoir keeps the hot path to a shift, a decrement and a conditional jump.</li>
+            <li><b>Table-driven lengths.</b> After a few prefix bits, <code>mov bl,[cs:bx+0x20E]</code> turns the code into a length.</li>
+            <li><b>Scrambled literals.</b> <code>xor al,dl</code> costs one instruction per byte.</li>
+            <li><b>Relocation pass.</b> The tail walks a list of offsets and does <code>add [es:di],bx</code> with the load segment. Offsets come in groups (a count, then the offsets); ES moves on by 0xFFF paragraphs after each group.</li>
+            <li><b><code>cli</code>/<code>sti</code> around <code>rep movsb</code>.</b> Present in the match copy; I could not find a reason for it in the code, so I do not offer one.</li>
+          </ul>
+        </aside>
+      </div>
+    </figure>
+
+    <div class="callout">
+      <span class="callout-mark">↳</span>
+      <p><strong>Checked:</strong> I ran this exact code under Unicorn (<code>tools/unpack.py</code>). It ends with <code>retf</code> to <code>1000:0151</code>, the entry point of the unpacked program, with SS:SP set and AX BX CX DX BP SI DI zeroed.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== PROTECTED MODE ============================== -->
+<section class="section alt" id="pm">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">04 / The runtime</p>
+      <h2>It brings its own<br>protected mode.</h2>
+    </div>
+
+    <div class="two-col">
+      <div class="prose">
+        <p>The image contains <code>lgdt</code>, <code>lidt</code> and <code>mov cr0,eax</code> (at <code>0x2F047</code>, <code>0x2F04C</code>, <code>0x2F07B</code>, <code>0x2F147</code>) and a far jump to selector <code>00B8</code>. So the demo builds its own descriptor tables and flips CR0.PE itself, with no DOS extender in the file. The check for hostile environments is spelled out in its own error text: <em>“This program requires a 80386 or 80486 CPU. The CPU is in Virtual 8086 Mode! Remove any EMM386/QEMM386/386MAX memory manager and quit all multitasking environments such as Windows, Desqview etc.”</em></p>
+        <p>Extended memory comes through XMS (<code>INT 2F</code> AX=4300/4310, then far calls through the driver pointer at <code>DS:EC92</code>); another error string is <em>“This program requires HIMEM.SYS”</em>. The VGA is driven directly: 96 <code>mov dx,0x3C4</code> sites (Mode X plane select), the CRTC at <code>0x3D4</code>, retrace polls on <code>0x3DA</code>.</p>
+        <p>The CPU-type probe and the long-integer helpers that test it are <strong>Borland Pascal runtime code</strong>, not the demo author’s (see routine 08 below).</p>
+      </div>
+      <aside class="side-card dark">
+        <h3>Verified locations</h3>
+        <table class="mini-table">
+          <tr><td><code>img 0x151</code></td><td>entry: chain of far calls to unit initialisers</td></tr>
+          <tr><td><code>DS:6FFA</code></td><td>CPU level 0 / 1 / 2 (Borland RTL)</td></tr>
+          <tr><td><code>DS:EBD4</code></td><td>GDTR operand</td></tr>
+          <tr><td><code>DS:EBDC</code></td><td>IDTR operand</td></tr>
+          <tr><td><code>DS:EC92</code></td><td>XMS driver far pointer</td></tr>
+          <tr><td><code>img 0x2F03E</code></td><td>real ↔ protected switch</td></tr>
+        </table>
+        <p class="fine">“img” offsets are into <code>tools/img.bin</code>, the unpacked image (segment 1000h). “DS:” offsets are in the data segment.</p>
+      </aside>
+    </div>
+
+    <figure class="code-card">
+      <figcaption>
+        <div>
+          <span class="code-title">The switch</span>
+          <span class="code-sub">image offset 0x2F03E</span>
+        </div>
+        <button class="copy" type="button" data-copy>Copy</button>
+      </figcaption>
+      <div class="code-body">
+        <pre><code class="asm">2F03E  FA                cli
+2F03F  8C D8             mov ax,ds
+2F041  8E C0             mov es,ax
+2F043  8E E0             mov fs,ax
+2F045  8E E8             mov gs,ax
+2F047  0F 01 16 D4 EB    lgdt word [0xebd4]   ; descriptor table register, from DS:EBD4
+2F04C  0F 01 1E DC EB    lidt word [0xebdc]   ; interrupt descriptor table, from DS:EBDC
+2F051  90                nop
+...
+2F075  66 B8 00 00 00 00 mov eax,0x0   ; (0x2F051–0x2F074 is 36 NOPs)
+2F07B  0F 22 C0          mov cr0,eax   ; PE = 0: back to real mode
+2F07E  EA B3 1F 0D 3D    jmp word 0x3d0d:word 0x1fb3   ; far jump back into the main code segment
+...
+2F141  66 B8 01 00 00 00 mov eax,0x1
+2F147  0F 22 C0          mov cr0,eax   ; PE = 1
+2F14A  EA 7F 20 B8 00    jmp word 0xb8:word 0x207f   ; far jump to selector 00B8
+2F14F  B8 18 00          mov ax,0x18</code></pre>
+        <aside class="code-notes">
+          <h4>Notes</h4>
+          <ul>
+            <li>The 36 NOPs after <code>lidt</code> are padding or a patch area; I did not determine which.</li>
+            <li>This listing is generated from the unpacked image, not typed.</li>
+          </ul>
+        </aside>
+      </div>
+    </figure>
+
+    <figure class="code-card">
+      <figcaption>
+        <div>
+          <span class="code-title">CPU probe (Borland runtime)</span>
+          <span class="code-sub">image offset 0x31571</span>
+        </div>
+        <button class="copy" type="button" data-copy>Copy</button>
+      </figcaption>
+      <div class="code-body">
+        <pre><code class="asm">31571  33 C0             xor ax,ax
+31573  9C                pushf
+31574  5B                pop bx
+31575  80 E7 0F          and bh,0xf   ; clear FLAGS bits 12–15
+31578  53                push bx
+31579  9D                popf
+3157A  9C                pushf
+3157B  59                pop cx
+3157C  80 E5 F0          and ch,0xf0
+3157F  80 FD F0          cmp ch,0xf0
+31582  74 0E             jz 0x1592   ; still set → 8086
+31584  40                inc ax
+31585  80 CF F0          or bh,0xf0
+31588  53                push bx
+31589  9D                popf
+3158A  9C                pushf
+3158B  59                pop cx
+3158C  80 E5 F0          and ch,0xf0
+3158F  74 01             jz 0x1592
+31591  40                inc ax   ; settable → 386 or later
+31592  A2 FA 6F          mov [0x6ffa],al   ; level 0/1/2 → DS:6FFA
+31595  C3                ret</code></pre>
+        <aside class="code-notes">
+          <h4>How it works</h4>
+          <p>On an 8086 FLAGS bits 12–15 always read 1; on a 286 in real mode they cannot be set; on a 386 they can. The result gates the 32-bit paths of the long multiply, divide and shifts. The demo itself still refuses to start below a 386 (message above), so the “fallback” is a library leftover, not a feature.</p>
+        </aside>
+      </div>
+    </figure>
+  </div>
+</section>
+
+<!-- ============================== ARCHIVE ============================== -->
+<section class="section" id="archive">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">05 / The archive</p>
+      <h2>58 files hidden<br>inside the EXE.</h2>
+    </div>
+
+    <div class="two-col">
+      <div class="prose">
+        <p class="lede">The 3 MB overlay is a private file archive. The demo opens <em>itself</em> and treats the tail of the EXE as a directory. I found it by following the demo’s own open routine (image offset <code>0x2FAF2</code>), then confirmed it by decoding every file: all four music files parse as MODs, all IFF files have valid chunk sizes, and the TGAs are real pictures.</p>
+        <p>The layout, all verified:</p>
+        <ul>
+          <li><b>EOF − 4</b>: dword <code>0x135A9</code>, where the overlay starts.</li>
+          <li><b>EOF − 6</b>: word, the file count (<code>58</code>), XOR <code>0x55</code>.</li>
+          <li><b>Directory</b>: 58 × 21 bytes ending there, XOR <code>0x55</code>: a length-prefixed 12-character name, a dword offset, a dword size.</li>
+          <li><b>File i</b> sits at <code>EOF − offset</code>. Files are stored in reverse order and are contiguous.</li>
+          <li><b>Data</b>: <code>plain[j] = ((raw[j] ^ 0x5A) + 21·⌊j/64⌋) &amp; 0xFF</code>, with j the offset inside the file. That odd rolling term is why a plain XOR gives pictures with horizontal stripes.</li>
+        </ul>
+        <h3 style="margin:28px 0 10px">Every format, and how far it is decoded</h3>
+        <table class="compact status">
+          <tr><td><b>.MOD</b> ×4</td><td>decoded</td><td>ProTracker 4-ch (<code>M.K.</code>) and 8-ch (<code>8CHN</code>) modules; mixed in the browser by <code>js/modplayer.js</code></td></tr>
+          <tr><td><b>.TGA</b> ×5</td><td>decoded</td><td>8-bit colour-mapped, 320×400 (Mode X double height)</td></tr>
+          <tr><td><b>.LBM</b> ×13</td><td>decoded</td><td>IFF ILBM (4 planes) and PBM (8-bit), ByteRun1; palettes, fonts, textures</td></tr>
+          <tr><td><b>Stndrd8.RAW</b></td><td>decoded</td><td>8×8 bitmap font, 128 glyphs (CP437-like, plus a VOGUE logo glyph)</td></tr>
+          <tr><td><b>SinTab.RAW</b></td><td>decoded</td><td>4 × 1,024 int16: sin and cos with amplitudes 23170 (=32766/√2) and 32766</td></tr>
+          <tr><td><b>IntroBG1/2.RAW</b></td><td>decoded</td><td>768-byte 8-bit palette + 320×200 pixels (a sound card, a mixing desk)</td></tr>
+          <tr><td><b>Scr_*.RAW</b> ×6</td><td>decoded</td><td>text pages: pre-laid-out lines of glyph blits from the big font (see “In their own words”)</td></tr>
+          <tr><td><b>.TVO</b> ×24</td><td>decoded</td><td>Vogue’s “VEC-ED v2.01” vector objects: palette, 16-byte face records, int16 vertices (two trailing sections look like per-vertex runtime scratch)</td></tr>
+          <tr><td><b>.TVW</b> ×2</td><td>partly</td><td>object-name table (64-byte records) and 96-byte instance records (object file name plus a transform-looking block); fields not fully understood</td></tr>
+          <tr><td><b>MegaFrac.DAT</b></td><td>decoded</td><td>4 VGA planes × 1,024 columns × 128 rows of Mandelbrot iteration counts (8 × 64 KB), plus a 16 KB per-column table that the demo loads into its code segment. The zoom is the original scaler’s: its pixel map is extracted and reproduces the emulated routine pixel for pixel</td></tr>
+          <tr><td><b>Overlay head</b></td><td>decoded</td><td>the 6,254 bytes before the first file are the unpacked program’s MZ relocation table: a count (1,563) and (offset, segment) pairs, 1,518 of which point at far-call opcodes; 25 distinct segment values</td></tr>
+        </table>
+        <p class="fine">Reproduce: <code>python3 tools/extract.py out/</code>, then <code>convert_assets.py</code>, <code>render_pages.py</code>, <code>read_tvo.py</code>, <code>export_data.py</code> (all in <code>tools/</code>).</p>
+      </div>
+      <aside class="side-card">
+        <h3>By type</h3>
+        <p class="fine" style="line-height:1.7">4 .MOD (1,173 KB) · 5 .TGA (629 KB) · 1 .DAT (528 KB) · 13 .LBM (354 KB) · 10 .RAW (177 KB) · 23 .TVO (115 KB) · 2 .TVW (20 KB)</p>
+        <h3>Directory</h3>
+        <div style="max-height:420px;overflow:auto"><table class="compact"><tr><td><code>SinTab.RAW</code></td><td>8,192</td><td><code>EOF − 0x2ED47C</code></td></tr><tr><td><code>IntroBG1.RAW</code></td><td>64,768</td><td><code>EOF − 0x2EB47C</code></td></tr><tr><td><code>IntroBG2.RAW</code></td><td>64,768</td><td><code>EOF − 0x2DB77C</code></td></tr><tr><td><code>Stndrd8.RAW</code></td><td>1,024</td><td><code>EOF − 0x2CBA7C</code></td></tr><tr><td><code>Scr_Comm.RAW</code></td><td>17,032</td><td><code>EOF − 0x2CB67C</code></td></tr><tr><td><code>Scr_Cred.RAW</code></td><td>2,258</td><td><code>EOF − 0x2C73F4</code></td></tr><tr><td><code>Scr_Gret.RAW</code></td><td>3,302</td><td><code>EOF − 0x2C6B22</code></td></tr><tr><td><code>Scr_Mess.RAW</code></td><td>5,032</td><td><code>EOF − 0x2C5E3C</code></td></tr><tr><td><code>Scr_Rumr.RAW</code></td><td>5,156</td><td><code>EOF − 0x2C4A94</code></td></tr><tr><td><code>Scr_Info.RAW</code></td><td>10,040</td><td><code>EOF − 0x2C3670</code></td></tr><tr><td><code>Declogue.MOD</code></td><td>297,708</td><td><code>EOF − 0x2C0F38</code></td></tr><tr><td><code>AmbPower.MOD</code></td><td>327,496</td><td><code>EOF − 0x27844C</code></td></tr><tr><td><code>Desert-D.MOD</code></td><td>260,064</td><td><code>EOF − 0x228504</code></td></tr><tr><td><code>TrnsAtln.MOD</code></td><td>315,418</td><td><code>EOF − 0x1E8D24</code></td></tr><tr><td><code>Arrows.LBM</code></td><td>3,068</td><td><code>EOF − 0x19BD0A</code></td></tr><tr><td><code>CD2-Text.LBM</code></td><td>16,388</td><td><code>EOF − 0x19B10E</code></td></tr><tr><td><code>Earth1.LBM</code></td><td>49,194</td><td><code>EOF − 0x19710A</code></td></tr><tr><td><code>Earth2.LBM</code></td><td>52,650</td><td><code>EOF − 0x18B0E0</code></td></tr><tr><td><code>Earth3.LBM</code></td><td>58,972</td><td><code>EOF − 0x17E336</code></td></tr><tr><td><code>EndFont2.LBM</code></td><td>40,208</td><td><code>EOF − 0x16FCDA</code></td></tr><tr><td><code>Marb32.LBM</code></td><td>51,718</td><td><code>EOF − 0x165FCA</code></td></tr><tr><td><code>Myfont.LBM</code></td><td>14,692</td><td><code>EOF − 0x1595C4</code></td></tr><tr><td><code>Nice-f16.LBM</code></td><td>17,896</td><td><code>EOF − 0x155C60</code></td></tr><tr><td><code>SideLogo.LBM</code></td><td>9,268</td><td><code>EOF − 0x151678</code></td></tr><tr><td><code>Stone-16.LBM</code></td><td>20,446</td><td><code>EOF − 0x14F244</code></td></tr><tr><td><code>TextPic.LBM</code></td><td>7,780</td><td><code>EOF − 0x14A266</code></td></tr><tr><td><code>Texture2.LBM</code></td><td>20,152</td><td><code>EOF − 0x148402</code></td></tr><tr><td><code>NC.TVW</code></td><td>10,744</td><td><code>EOF − 0x14354A</code></td></tr><tr><td><code>NFly2.TVW</code></td><td>10,080</td><td><code>EOF − 0x140B52</code></td></tr><tr><td><code>Earth3.TVO</code></td><td>15,620</td><td><code>EOF − 0x13E3F2</code></td></tr><tr><td><code>NC-MB3.TVO</code></td><td>2,874</td><td><code>EOF − 0x13A6EE</code></td></tr><tr><td><code>NC-MB4.TVO</code></td><td>2,874</td><td><code>EOF − 0x139BB4</code></td></tr><tr><td><code>NCD-Bond.TVO</code></td><td>5,908</td><td><code>EOF − 0x13907A</code></td></tr><tr><td><code>NCD-Hrse.TVO</code></td><td>4,782</td><td><code>EOF − 0x137966</code></td></tr><tr><td><code>NCD-King.TVO</code></td><td>8,236</td><td><code>EOF − 0x1366B8</code></td></tr><tr><td><code>NCD-Towr.TVO</code></td><td>7,604</td><td><code>EOF − 0x13468C</code></td></tr><tr><td><code>NCD-Quen.TVO</code></td><td>7,748</td><td><code>EOF − 0x1328D8</code></td></tr><tr><td><code>NCL-Bond.TVO</code></td><td>5,908</td><td><code>EOF − 0x130A94</code></td></tr><tr><td><code>NCL-Hrse.TVO</code></td><td>4,782</td><td><code>EOF − 0x12F380</code></td></tr><tr><td><code>NCL-King.TVO</code></td><td>8,236</td><td><code>EOF − 0x12E0D2</code></td></tr><tr><td><code>NCL-Towr.TVO</code></td><td>7,604</td><td><code>EOF − 0x12C0A6</code></td></tr><tr><td><code>NCL-Quen.TVO</code></td><td>7,830</td><td><code>EOF − 0x12A2F2</code></td></tr><tr><td><code>NF-NShip.TVO</code></td><td>3,252</td><td><code>EOF − 0x12845C</code></td></tr><tr><td><code>NF-Seg01.TVO</code></td><td>1,392</td><td><code>EOF − 0x1277A8</code></td></tr><tr><td><code>NF-Seg02.TVO</code></td><td>2,300</td><td><code>EOF − 0x127238</code></td></tr><tr><td><code>NF-Seg03.TVO</code></td><td>2,748</td><td><code>EOF − 0x12693C</code></td></tr><tr><td><code>NF-Seg04.TVO</code></td><td>4,268</td><td><code>EOF − 0x125E80</code></td></tr><tr><td><code>NF-Seg05.TVO</code></td><td>2,044</td><td><code>EOF − 0x124DD4</code></td></tr><tr><td><code>NF-Seg06.TVO</code></td><td>2,212</td><td><code>EOF − 0x1245D8</code></td></tr><tr><td><code>NF-Seg07.TVO</code></td><td>4,600</td><td><code>EOF − 0x123D34</code></td></tr><tr><td><code>SHD_Cube.TVO</code></td><td>1,202</td><td><code>EOF − 0x122B3C</code></td></tr><tr><td><code>TxtTori8.TVO</code></td><td>3,688</td><td><code>EOF − 0x12268A</code></td></tr><tr><td><code>MegaFrac.DAT</code></td><td>540,672</td><td><code>EOF − 0x121822</code></td></tr><tr><td><code>Raytrac1.TGA</code></td><td>128,786</td><td><code>EOF − 0x9D822</code></td></tr><tr><td><code>Raytrac3.TGA</code></td><td>128,786</td><td><code>EOF − 0x7E110</code></td></tr><tr><td><code>Raytrac4.TGA</code></td><td>128,786</td><td><code>EOF − 0x5E9FE</code></td></tr><tr><td><code>TRN-L3.TGA</code></td><td>128,786</td><td><code>EOF − 0x3F2EC</code></td></tr><tr><td><code>MainM256.TGA</code></td><td>128,786</td><td><code>EOF − 0x1FBDA</code></td></tr></table></div>
+      </aside>
+    </div>
+
+    <h3 style="margin:48px 0 16px">Decoded straight from the EXE</h3>
+    <div class="gallery"><figure class="gal"><img src="assets/orig/MainM256.png" alt="MainM256.TGA — the real main menu (320×400)" loading="lazy"><figcaption>MainM256.TGA — the real main menu (320×400)</figcaption></figure><figure class="gal"><img src="assets/orig/Raytrac1.png" alt="Raytrac1.TGA" loading="lazy"><figcaption>Raytrac1.TGA</figcaption></figure><figure class="gal"><img src="assets/orig/Raytrac3.png" alt="Raytrac3.TGA" loading="lazy"><figcaption>Raytrac3.TGA</figcaption></figure><figure class="gal"><img src="assets/orig/Raytrac4.png" alt="Raytrac4.TGA" loading="lazy"><figcaption>Raytrac4.TGA</figcaption></figure><figure class="gal"><img src="assets/orig/TRN-L3.png" alt="TRN-L3.TGA" loading="lazy"><figcaption>TRN-L3.TGA</figcaption></figure><figure class="gal"><img src="assets/orig/Earth1.png" alt="Earth1.LBM" loading="lazy"><figcaption>Earth1.LBM</figcaption></figure><figure class="gal"><img src="assets/orig/Marb32.png" alt="Marb32.LBM" loading="lazy"><figcaption>Marb32.LBM</figcaption></figure><figure class="gal"><img src="assets/orig/Stone-16.png" alt="Stone-16.LBM" loading="lazy"><figcaption>Stone-16.LBM</figcaption></figure><figure class="gal"><img src="assets/orig/TextPic.png" alt="TextPic.LBM" loading="lazy"><figcaption>TextPic.LBM</figcaption></figure><figure class="gal"><img src="assets/orig/Nice-f16.png" alt="Nice-f16.LBM — font" loading="lazy"><figcaption>Nice-f16.LBM — font</figcaption></figure><figure class="gal"><img src="assets/orig/EndFont2.png" alt="EndFont2.LBM — font" loading="lazy"><figcaption>EndFont2.LBM — font</figcaption></figure><figure class="gal"><img src="assets/orig/CD2-Text.png" alt="CD2-Text.LBM" loading="lazy"><figcaption>CD2-Text.LBM</figcaption></figure></div>
+    <p class="caption-note">Pictures are 320×200 or 320×400 (Mode X double height). Shown at 4:3, the shape of the display they were made for. These are the original images, not screenshots.</p>
+    <h3 style="margin:36px 0 12px">MegaFrac.DAT, deplaned (4096 × 128)</h3>
+    <img src="assets/orig/strip.png" alt="The 4224 by 128 fractal strip from MegaFrac.DAT" style="width:100%;height:auto;image-rendering:pixelated;background:#000">
+    <p class="caption-note">Four VGA planes of 1,024 columns interleave into one 4,096 × 128 strip (the last 16&nbsp;KB of the file is not picture data: the demo reads it into its code segment as the per-column table). The strip is log-scaled: the scene’s column map is <code>round(i/8 + 68.1·ln((j+1)·2²⁴/500))</code>, 47.2 columns per octave, so scrolling it by 944 columns is exactly 20 octaves, the authors’ “zoomfactor of 1048576”. The Fractal scene plays it with the original scaler’s pixel map.</p>
+  </div>
+</section>
+
+<!-- ============================== ASM ============================== -->
+<section class="section" id="asm">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">06 / The code</p>
+      <h2>Eleven routines,<br>and who wrote them.</h2>
+    </div>
+    <p class="section-lede">Every listing below is generated from the unpacked image by <code>tools/gen_asm.py</code>, so the bytes cannot drift. Each card says who probably wrote it: <em>asm-style</em> means 386 code inside a 16-bit Pascal program with no compiler frame, <em>Borland Pascal runtime</em> and <em>compiler output</em> mean the opposite. The demo’s own Information page says “Borland Pascal 7.0 (Assembler of coz)”, i.e. inline <code>asm</code> blocks inside Pascal, so “hand-written” remains an inference from style.</p>
+
+    <div class="asm-grid">
+
+      <article class="asm-card">
+        <div class="asm-top"><span class="asm-num">01</span><span class="badge">★ favourite</span><span class="badge">asm-style</span></div>
+        <h3>Write columns, not rows</h3>
+        <p class="asm-sub">Mode X planar blit · image offset 0x6E1</p>
+        <pre class="asm-mini"><code class="asm">006E1  57                push di
+006E2  56                push si
+006E3  51                push cx
+006E4  49                dec cx
+006E5  01 CE             add si,cx
+006E7  89 CB             mov bx,cx
+006E9  81 E3 03 00       and bx,0x3
+006ED  2E 8A A7 DD 01    mov ah,[cs:bx+0x1dd]   ; plane mask for x mod 4, from a 4-byte table in CS
+006F2  B0 02             mov al,0x2
+006F4  BA C4 03          mov dx,0x3c4
+006F7  EF                out dx,ax   ; one OUT selects the plane (index 2 + mask in AH)
+006F8  89 C8             mov ax,cx
+006FA  C1 E8 02          shr ax,byte 0x2
+006FD  01 C7             add di,ax
+006FF  B9 C8 00          mov cx,0xc8
+00702  A4                movsb   ; one pixel; SI/DI auto-increment
+00703  81 C6 3F 01       add si,0x13f   ; +319 (+1 from movsb) = next source row of a 320-wide image
+00707  83 EF 51          sub di,0x51   ; -81 (+1 from movsb) = +80, next Mode X row
+0070A  E2 F6             loop 0x702   ; 200 rows per column
+0070C  59                pop cx
+0070D  5E                pop si
+0070E  5F                pop di
+0070F  E2 D0             loop 0x6e1</code></pre>
+        <p>Mode X splits a row across four planes, so a plain left-to-right copy would need a plane switch every pixel. This loop turns the copy sideways: for each of the 320 columns it does <em>one</em> <code>OUT DX,AX</code> to pick the plane, then walks 200 rows with <code>movsb</code>. That is 320 port writes instead of 64,000. The two odd-looking constants are strides with the <code>movsb</code> auto-increment folded in: <code>+0x13F</code> (319) plus the 1 from <code>movsb</code> is a 320-byte source row, and <code>−0x51</code> (81) plus 1 is the 80-byte Mode X row. The routine appears twice back to back; the second copy writes through ES = 0x30, a flat selector.</p>
+        <div class="asm-foot"><span>VGA · 0x3C4</span><span>320 OUTs, 64,000 movsb</span></div>
+      </article>
+
+      <article class="asm-card">
+        <div class="asm-top"><span class="asm-num">02</span><span class="badge">★ favourite</span><span class="badge">asm-style</span></div>
+        <h3>Fill a span four bytes at a time</h3>
+        <p class="asm-sub">Polygon scanline fill · image offset 0x22EAF / 0x22EE0</p>
+        <pre class="asm-mini"><code class="asm">22EAF  36 A0 10 04       mov al,[ss:0x410]
+22EB3  88 C4             mov ah,al
+22EB5  89 C2             mov dx,ax
+22EB7  66 C1 E0 10       shl eax,byte 0x10   ; AL → AX → EAX: the colour byte copied into all four bytes
+22EBB  89 D0             mov ax,dx
+22EBD  8B 16 68 D2       mov dx,[0xd268]
+...
+22EE0  51                push cx
+22EE1  89 DF             mov di,bx
+22EE3  89 D1             mov cx,dx
+22EE5  29 D9             sub cx,bx   ; CX = x2 − x1
+22EE7  74 2E             jz 0x2f17
+22EE9  73 04             jnc 0x2eef
+22EEB  F7 D9             neg cx   ; swap so the span always runs left to right
+22EED  89 D7             mov di,dx
+22EEF  01 EF             add di,bp
+22EF1  F7 C7 01 00       test di,0x1   ; byte alignment prologue
+22EF5  74 04             jz 0x2efb
+22EF7  AA                stosb
+22EF8  49                dec cx
+22EF9  74 1C             jz 0x2f17
+22EFB  D1 E9             shr cx,1   ; SHR CX,1: the odd-byte bit goes to CF…
+22EFD  74 15             jz 0x2f14
+22EFF  9C                pushf   ; …and PUSHF parks it across the loop
+22F00  F7 C7 02 00       test di,0x2   ; word alignment prologue
+22F04  74 04             jz 0x2f0a
+22F06  AB                stosw
+22F07  49                dec cx
+22F08  74 09             jz 0x2f13
+22F0A  D1 E9             shr cx,1
+22F0C  72 0F             jc 0x2f1d
+22F0E  74 03             jz 0x2f13
+22F10  F3 66 AB          rep stosd   ; the actual work: 4 pixels per store
+22F13  9D                popf   ; POPF restores CF
+22F14  73 01             jnc 0x2f17   ; …so a trailing byte is one JNC away
+22F16  AA                stosb
+22F17  59                pop cx</code></pre>
+        <p>The scanline filler first replicates the colour into <code>EAX</code> (<code>mov ah,al</code> … <code>shl eax,16</code> … <code>mov ax,dx</code>). Then it aligns the destination with at most one <code>stosb</code> and one <code>stosw</code>, so the bulk can be a single <code>rep stosd</code>. The neat part is bookkeeping: <code>shr cx,1</code> leaves the odd-pixel flag in the carry, and <code>pushf</code>/<code>popf</code> carries it across the fill instead of burning a register. The <code>0x1234</code> immediates in the edge-stepping lines just above look like placeholders of the same kind the plasma routine patches at runtime (card 11); I did not find the patch site for this one, so I do not claim it.</p>
+        <div class="asm-foot"><span>386 · rep stosd</span><span>align, bulk, tail</span></div>
+      </article>
+
+      <article class="asm-card">
+        <div class="asm-top"><span class="asm-num">03</span><span class="badge">★ favourite</span><span class="badge">asm-style</span></div>
+        <h3>Square root by Newton, 64 bits in</h3>
+        <p class="asm-sub">Integer sqrt · image offset 0x16120</p>
+        <pre class="asm-mini"><code class="asm">16120  55                push bp
+16121  89 E5             mov bp,sp
+16123  55                push bp
+16124  66 8B 4E 08       mov ecx,[bp+0x8]   ; ECX = low dword of N
+16128  66 8B 76 04       mov esi,[bp+0x4]   ; ESI = high dword of N
+1612C  66 89 CB          mov ebx,ecx
+1612F  66 09 DB          or ebx,ebx
+16132  74 31             jz 0x6165
+16134  66 D1 EB          shr ebx,1   ; first guess: N/2 + 1
+16137  66 43             inc ebx
+16139  66 09 F6          or esi,esi
+1613C  74 06             jz 0x6144
+1613E  66 BB FF FF FF 7F mov ebx,0x7fffffff   ; N ≥ 2^32: start from the largest positive dword
+16144  BF 11 00          mov di,0x11   ; 17 fixed iterations
+16147  66 89 C8          mov eax,ecx
+1614A  66 89 F2          mov edx,esi
+1614D  66 F7 F3          div ebx   ; EDX:EAX / EBX: a 64-bit dividend
+16150  66 31 ED          xor ebp,ebp
+16153  66 01 D8          add eax,ebx   ; x + N/x as a 33-bit value: ADD then ADC into EBP
+16156  66 83 D5 00       adc ebp,0x0
+1615A  66 0F AC E8 01    shrd eax,ebp,byte 0x1   ; SHRD by 1 = (x + N/x) / 2 with the carry bit shifted back in
+1615F  66 89 C3          mov ebx,eax
+16162  4F                dec di
+16163  75 E2             jnz 0x6147
+16165  66 36 89 1E BE 06 mov [ss:0x6be],ebx
+1616B  89 D8             mov ax,bx
+1616D  66 89 DA          mov edx,ebx   ; returned as DX:AX (the Pascal longint convention)
+16170  66 C1 C2 10       rol edx,byte 0x10
+16174  5D                pop bp
+16175  C9                leave
+16176  C2 08 00          ret word 0x8</code></pre>
+        <p>A fixed-iteration Newton–Raphson square root, <code>x ← (x + N/x) / 2</code>. The detail worth stealing is the averaging step: <code>x + N/x</code> can exceed 32 bits, so the code adds with <code>add</code>/<code>adc</code> into a second register and then halves the 33-bit sum with one <code>shrd eax,ebp,1</code>. No overflow guard, no branch. Seventeen iterations is a blunt but constant-time answer for 64-bit input.</p>
+        <div class="asm-foot"><span>386 · div, adc, shrd</span><span>17 iterations, branch-free</span></div>
+      </article>
+
+      <article class="asm-card">
+        <div class="asm-top"><span class="asm-num">04</span><span class="badge">★ favourite</span><span class="badge">asm-style</span></div>
+        <h3>Normalise a vector without losing a bit</h3>
+        <p class="asm-sub">|v|² in 96 bits, then scale · image offset 0x16179</p>
+        <pre class="asm-mini"><code class="asm">16179  55                push bp
+1617A  89 E5             mov bp,sp
+1617C  1E                push ds
+1617D  C5 76 0A          lds si,word [bp+0xa]
+16180  66 8B 04          mov eax,[si]
+16183  66 F7 E8          imul eax   ; one-operand IMUL: EDX:EAX = x²
+16186  66 89 D7          mov edi,edx   ; keep the high half in EDI
+16189  66 89 C1          mov ecx,eax   ; low half in ECX
+1618C  66 8B 44 04       mov eax,[si+0x4]
+16190  66 F7 E8          imul eax
+16193  66 01 C1          add ecx,eax   ; add y² …
+16196  66 11 D7          adc edi,edx   ; … carry into the high half
+16199  66 8B 44 08       mov eax,[si+0x8]
+1619D  66 F7 E8          imul eax
+161A0  66 01 C8          add eax,ecx   ; add z²
+161A3  66 11 FA          adc edx,edi   ; EDX:EAX = x²+y²+z² (64-bit)
+...
+161B8  66 36 8B 1E BE 06 mov ebx,[ss:0x6be]
+161BE  66 8B 4E 06       mov ecx,[bp+0x6]
+161C2  66 8B 04          mov eax,[si]
+161C5  66 F7 E9          imul ecx   ; component × target length
+161C8  66 F7 FB          idiv ebx   ; ÷ actual length, rounded toward zero
+161CB  66 89 04          mov [si],eax</code></pre>
+        <p>Vectors are three signed dwords. The squared length is accumulated with the one-operand <code>imul</code>, which yields a full 64-bit product in <code>EDX:EAX</code>, and three <code>add</code>/<code>adc</code> pairs that propagate carries. The result feeds the square root above, and each component is then rescaled with <code>imul ecx</code> / <code>idiv ebx</code>, a 64-bit intermediate again, so precision is never thrown away before the divide.</p>
+        <div class="asm-foot"><span>386 · imul, adc, idiv</span><span>no precision lost</span></div>
+      </article>
+
+      <article class="asm-card">
+        <div class="asm-top"><span class="asm-num">05</span><span class="badge">asm-style</span></div>
+        <h3>16.16 squares with SHRD</h3>
+        <p class="asm-sub">Fixed-point sum of squares · image offset 0x18327</p>
+        <pre class="asm-mini"><code class="asm">18327  66 36 8B 75 08    mov esi,[ss:di+0x8]
+1832C  66 36 8B 05       mov eax,[ss:di]
+18330  66 F7 E8          imul eax   ; EDX:EAX = x²  (value in 16.16, so the product is 32.32)
+18333  66 0F AC D0 10    shrd eax,edx,byte 0x10   ; SHRD by 16 takes the middle dword: back to 16.16
+18338  66 89 C1          mov ecx,eax   ; running total in ECX
+1833B  66 36 8B 45 04    mov eax,[ss:di+0x4]
+18340  66 F7 E8          imul eax
+18343  66 0F AC D0 10    shrd eax,edx,byte 0x10
+18348  66 01 C1          add ecx,eax
+1834B  66 89 F0          mov eax,esi
+1834E  66 F7 E8          imul eax
+18351  66 0F AC D0 10    shrd eax,edx,byte 0x10
+18356  66 01 C1          add ecx,eax
+18359  66 09 F6          or esi,esi
+1835C  79 03             jns 0x8361
+1835E  66 F7 D9          neg ecx   ; sign taken from ESI (the third value): negate the total if it is negative
+18361  66 36 89 0F       mov [ss:bx],ecx</code></pre>
+        <p>When values are 16.16 fixed point, multiplying gives 32.32. This code squares three table entries and slides each product back with <code>shrd eax,edx,16</code>, a single instruction doing the 64→32 rescale a 16-bit compiler would need a loop of shifts for.</p>
+        <div class="asm-foot"><span>386 · imul, shrd</span><span>3 squares, 3 shifts</span></div>
+      </article>
+
+      <article class="asm-card">
+        <div class="asm-top"><span class="asm-num">06</span><span class="badge">asm-style</span></div>
+        <h3>Clip the edge, not the loop</h3>
+        <p class="asm-sub">Slope × clip distance · image offset 0x3B2E</p>
+        <pre class="asm-mini"><code class="asm">03B2E  66 26 89 85 A0 00 mov [es:di+0xa0],eax
+03B34  66 AB             stosd
+03B36  8A 84 01 02       mov al,[si+0x201]
+03B3A  00 D8             add al,bl
+03B3C  8A A4 01 02       mov ah,[si+0x201]
+03B40  00 DC             add ah,bl
+03B42  66 C1 C0 10       rol eax,byte 0x10
+03B46  8A 84 01 02       mov al,[si+0x201]
+03B4A  00 D8             add al,bl
+03B4C  8A A4 01 02       mov ah,[si+0x201]
+03B50  00 DC             add ah,bl</code></pre>
+        <p>Before filling a polygon the rasteriser advances each edge to the clip window in one step: two 32-bit fixed-point slopes (the routine updates two accumulators) times the number of clipped scanlines, using one <code>imul</code> for the signed high word and one <code>mul</code> for the low word, then <code>add</code>/<code>adc</code> straight into the edge variables. A multiply per clipped edge replaces stepping through invisible scanlines.</p>
+        <div class="asm-foot"><span>16-bit · imul + mul</span><span>32×16 multiply by hand</span></div>
+      </article>
+
+      <article class="asm-card">
+        <div class="asm-top"><span class="asm-num">07</span><span class="badge">asm-style</span></div>
+        <h3>Crop with rep movsd</h3>
+        <p class="asm-sub">256-wide crop of a 320×200 image · image offset 0x195B8</p>
+        <pre class="asm-mini"><code class="asm">195B8  FC                cld
+195B9  1E                push ds
+195BA  8E 86 FE FE       mov es,word [bp-0x102]
+195BE  A1 F4 6F          mov ax,[0x6ff4]
+195C1  8E D8             mov ds,ax
+195C3  31 F6             xor si,si
+195C5  89 F7             mov di,si
+195C7  B9 C8 00          mov cx,0xc8
+195CA  51                push cx
+195CB  B9 40 00          mov cx,0x40   ; 0x40 dwords = 256 bytes per row
+195CE  F3 66 A5          rep movsd   ; 4 bytes per iteration
+195D1  83 C6 40          add si,0x40   ; skip the remaining 64 of the 320 source bytes
+195D4  59                pop cx
+195D5  E2 F3             loop 0x95ca
+195D7  1F                pop ds</code></pre>
+        <p>Texture-sized 256×200 data is cut out of a 320×200 screen buffer with 200 short <code>rep movsd</code> runs and a 64-byte skip per row. No per-pixel work, and the destination stays contiguous so later lookups can use an 8-bit column index.</p>
+        <div class="asm-foot"><span>386 · rep movsd</span><span>200 rows × 64 dwords</span></div>
+      </article>
+
+      <article class="asm-card">
+        <div class="asm-top"><span class="asm-num">08</span><span class="badge">Borland Pascal runtime</span></div>
+        <h3>Borland’s CPU test and long multiply</h3>
+        <p class="asm-sub">Pascal runtime, not Triton · image offset 0x31571 / 0x31E4C</p>
+        <pre class="asm-mini"><code class="asm">31571  33 C0             xor ax,ax
+31573  9C                pushf
+31574  5B                pop bx
+31575  80 E7 0F          and bh,0xf   ; clear FLAGS bits 12–15
+31578  53                push bx
+31579  9D                popf
+3157A  9C                pushf
+3157B  59                pop cx
+3157C  80 E5 F0          and ch,0xf0
+3157F  80 FD F0          cmp ch,0xf0
+31582  74 0E             jz 0x1592   ; still set → 8086
+31584  40                inc ax
+31585  80 CF F0          or bh,0xf0
+31588  53                push bx
+31589  9D                popf
+3158A  9C                pushf
+3158B  59                pop cx
+3158C  80 E5 F0          and ch,0xf0
+3158F  74 01             jz 0x1592
+31591  40                inc ax   ; settable → 386 or later
+31592  A2 FA 6F          mov [0x6ffa],al   ; level 0/1/2 stored at DS:6FFA
+31595  C3                ret
+...
+31E4C  80 3E FA 6F 02    cmp byte [0x6ffa],0x2   ; every long helper starts with this test
+31E51  72 1B             jc 0x1e6e
+31E53  66 C1 E0 10       shl eax,byte 0x10
+31E57  66 0F AC D0 10    shrd eax,edx,byte 0x10   ; DX:AX → EAX
+31E5C  66 C1 E1 10       shl ecx,byte 0x10
+31E60  66 0F AC D9 10    shrd ecx,ebx,byte 0x10
+31E65  66 F7 E9          imul ecx   ; one IMUL
+31E68  66 0F A4 C2 10    shld edx,eax,byte 0x10   ; low 32 bits back in DX:AX
+31E6D  CB                retf</code></pre>
+        <p>This is the most quoted snippet in the file and it is <strong>not</strong> demo-author code. It sits beside the string <code>Copyright (c) 1983,92 Borland</code>: it is the Borland Pascal 7 runtime, which tests the CPU once at start-up and then lets its long multiply/divide/shift helpers (four of them, at 0x31E4C, 0x31E89, 0x31F2F, 0x31F48) use 32-bit instructions on a 386. Two corrections to what an earlier version of this page said: the multiply returns only the <em>low 32 bits</em> (not a 64-bit product), and the demo does <em>not</em> run on a 286: it refuses to start below a 386 (see the message in the runtime section).</p>
+        <div class="asm-foot"><span>x86 · FLAGS probe</span><span>compiler runtime</span></div>
+      </article>
+
+      <article class="asm-card">
+        <div class="asm-top"><span class="asm-num">09</span><span class="badge">compiler output</span></div>
+        <h3>Flip on the beam</h3>
+        <p class="asm-sub">CRTC start address · image offset 0x30545</p>
+        <pre class="asm-mini"><code class="asm">30545  55                push bp
+30546  89 E5             mov bp,sp
+30548  80 3E 62 66 00    cmp byte [0x6662],0x0
+3054D  75 36             jnz 0x585
+3054F  BA DA 03          mov dx,0x3da
+30552  EC                in al,dx
+30553  A8 08             test al,0x8   ; bit 3 of 0x3DA: vertical retrace
+30555  75 FB             jnz 0x552   ; loop while retrace is active
+30557  FA                cli
+30558  8B 46 06          mov ax,[bp+0x6]
+3055B  A3 72 66          mov [0x6672],ax
+3055E  88 C3             mov bl,al
+30560  B0 0C             mov al,0xc   ; CRTC register 0x0C: start address high
+30562  BA D4 03          mov dx,0x3d4
+30565  EF                out dx,ax   ; one OUT writes index and data
+30566  88 DC             mov ah,bl
+30568  FE C0             inc al   ; then register 0x0D: start address low
+3056A  EF                out dx,ax
+3056B  FB                sti</code></pre>
+        <p>Textbook Mode X double buffering: draw into the hidden page, then move the CRTC start address. It is compiler-shaped (<code>push bp</code>/<code>mov bp,sp</code> frame, argument at <code>[bp+6]</code>), so I credit the technique, not hand-tuning. Note that <code>out dx,ax</code> writes the CRTC index and its data with one instruction.</p>
+        <div class="asm-foot"><span>VGA · CRTC 0x0C/0x0D</span><span>compiled Pascal</span></div>
+      </article>
+
+      <article class="asm-card">
+        <div class="asm-top"><span class="asm-num">10</span><span class="badge">★ favourite</span><span class="badge">asm-style</span></div>
+        <h3>Scale a column with an end-around carry</h3>
+        <p class="asm-sub">Fractal zoom column scaler · image offset 0x7FB1 (block at 0x81ED)</p>
+        <pre class="asm-mini"><code class="asm">081ED  8B 76 F2          mov si,[bp-0xe]
+081F0  64 8E 9C 9E 8B    mov ds,word [fs:si-0x7462]   ; tile segment chosen by bit 9 of the column index
+081F5  8B 76 F8          mov si,[bp-0x8]
+081F8  2E 8B 54 20       mov dx,[cs:si+0x20]   ; per-column record from the code segment: count,
+081FC  83 FA 03          cmp dx,0x3
+081FF  74 3F             jz 0x8240
+08201  2E 8B 7C 22       mov di,[cs:si+0x22]   ; destination offset,
+08205  66 2E 8B 74 24    mov esi,[cs:si+0x24]   ; and a 32-bit fixed-point source position
+0820A  03 76 F4          add si,[bp-0xc]   ; + column*128 = start of the source column
+0820D  29 CE             sub si,cx
+0820F  D1 EA             shr dx,1   ; low two bits of the count pick the entry point in the 4x unrolled body (Duff style)
+08211  72 09             jc 0x821c
+08213  D1 EA             shr dx,1
+08215  72 0E             jc 0x8225
+08217  66 01 CE          add esi,ecx
+0821A  EB 1D             jmp 0x8239
+0821C  D1 EA             shr dx,1
+0821E  72 0A             jc 0x822a
+08220  66 01 CE          add esi,ecx
+08223  EB 10             jmp 0x8235
+08225  66 01 CE          add esi,ecx
+08228  EB 07             jmp 0x8231
+0822A  66 01 CE          add esi,ecx
+0822D  A4                movsb   ; copy one byte (SI and DI advance)
+0822E  66 11 CE          adc esi,ecx   ; ESI += ECX + carry: the carry out of the fraction re-enters as +1 on the position
+08231  A4                movsb
+08232  66 11 CE          adc esi,ecx
+08235  A4                movsb
+08236  66 11 CE          adc esi,ecx
+08239  A4                movsb
+0823A  66 11 CE          adc esi,ecx
+0823D  4A                dec dx   ; 4 pixels per trip
+0823E  75 ED             jnz 0x822d</code></pre>
+        <p>This is the engine of the fractal zoom. The picture is a log-mapped strip, so zooming is just scrolling it: <code>col = T[z&amp;7][j] − (z&gt;&gt;3)</code>. Each screen column is then a vertical slice of that strip scaled by a per-column factor. The scaler keeps source position and fraction in one <code>ESI</code>: <code>movsb</code> advances the 16-bit position by one, and <code>adc esi,ecx</code> adds the step to both halves, with the carry out of the fractional half re-entering as +1 on the position. That is Bresenham with no branch, unrolled four times and entered through the low two bits of the count. I ran this exact routine under emulation to read the zoom back out of <code>MegaFrac.DAT</code> (see the Recreation).</p>
+        <div class="asm-foot"><span>386 · movsb, adc esi</span><span>100 columns x 400 pixels per frame</span></div>
+      </article>
+
+      <article class="asm-card">
+        <div class="asm-top"><span class="asm-num">11</span><span class="badge">★ favourite</span><span class="badge">asm-style</span></div>
+        <h3>Patch the loop, not the index</h3>
+        <p class="asm-sub">Plasma renderer · image offset 0x3A82 (loop at 0x3B09)</p>
+        <pre class="asm-mini"><code class="asm">03A86  3E 8E 26 96 8B    mov fs,word [ds:0x8b96]
+03A8B  8B 46 04          mov ax,[bp+0x4]
+03A8E  64 A3 1A 01       mov [fs:0x11a],ax   ; PATCH: the step (7) becomes the displacement inside the loop below
+03A92  03 46 04          add ax,[bp+0x4]
+03A95  25 FF 07          and ax,0x7ff
+03A98  64 A3 06 01       mov [fs:0x106],ax   ; PATCH: 2 x step
+03A9C  03 46 04          add ax,[bp+0x4]
+...
+03B06  8B 5E FA          mov bx,[bp-0x6]
+03B09  8A 07             mov al,[bx]   ; row constant: T[p3] + T[p4]
+03B0B  8B 5E F8          mov bx,[bp-0x8]
+03B0E  02 07             add al,[bx]
+03B10  88 C3             mov bl,al
+03B12  89 D6             mov si,dx
+03B14  8A 84 01 02       mov al,[si+0x201]   ; pixel k: T[si + k*step] + row constant (displacements patched above)
+03B18  00 D8             add al,bl
+03B1A  8A A4 01 02       mov ah,[si+0x201]
+03B1E  00 DC             add ah,bl
+03B20  66 C1 C0 10       rol eax,byte 0x10   ; two bytes in AX, ROL 16, two more: four pixels in EAX
+03B24  8A 04             mov al,[si]
+03B26  00 D8             add al,bl
+03B28  8A A4 01 02       mov ah,[si+0x201]
+03B2C  00 DC             add ah,bl
+03B2E  66 26 89 85 A0 00 mov [es:di+0xa0],eax   ; one store for the line below ...
+03B34  66 AB             stosd   ; ... one for this line (pitch 160 bytes)
+03B36  8A 84 01 02       mov al,[si+0x201]
+03B3A  00 D8             add al,bl
+03B3C  8A A4 01 02       mov ah,[si+0x201]
+03B40  00 DC             add ah,bl
+03B42  66 C1 C0 10       rol eax,byte 0x10
+03B46  8A 84 01 02       mov al,[si+0x201]
+03B4A  00 D8             add al,bl
+03B4C  8A A4 01 02       mov ah,[si+0x201]
+03B50  00 DC             add ah,bl
+03B52  66 26 89 85 A0 00 mov [es:di+0xa0],eax
+03B58  66 AB             stosd
+03B5A  81 C6 34 12       add si,0x1234   ; si += 8 x step (patched)
+03B5E  81 E6 FF 7F       and si,0x7fff   ; wrap at 0x7FFF
+03B62  49                dec cx
+03B63  75 AF             jnz 0x3b14
+03B65  1F                pop ds
+03B66  83 46 FE 02       add word [bp-0x2],0x2</code></pre>
+        <p>The plasma is <code>T[p1+2y+7x] + T[p3−3y] + T[p4−y]</code> with <code>T = 128+127·sin</code>, written in 4-pixel blocks (all four planes enabled, so a byte is four identical pixels) and in two identical lines per store. The cheap part is the inner loop: the eight table offsets are <em>immediates inside the instructions</em> (<code>[si+0x201]</code> is a placeholder). At the top of each frame the routine writes the step multiples straight into its own code through a code-segment alias, so the loop needs no index registers for them. I ran this routine, the table builder and the palette routine under emulation; the JavaScript scene matches them exactly (see the Recreation).</p>
+        <div class="asm-foot"><span>386 · self-modifying code</span><span>80 x 100 blocks per frame</span></div>
+      </article>
+
+    </div>
+
+    <div class="callout wide">
+      <span class="callout-mark">★</span>
+      <p><strong>The honest summary:</strong> the genuinely interesting code is the 386 inner loops (span fill, fixed-point maths, Newton sqrt, planar blit, the fractal column scaler and the self-patching plasma). The CPU probe, long multiply and page-flip wrappers people usually quote are compiler or runtime output. An earlier version of this page showed a plasma loop that was invented; the real one is card 11.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== RECREATION ============================== -->
+<section class="section alt recreation" id="recreation">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">07 / The recreation</p>
+      <h2>Same resolution.<br>A look-alike, not a port.</h2>
+    </div>
+
+    <p class="section-lede">A 320×200 indexed framebuffer, a 256-colour palette, palette fades, and a scene clock — rebuilt in JavaScript. No original code is executed. Pictures, menu, plasma, fractal zoom, Earth and chess models, textures and music are the original decoded data; the cube scene replays 2,382 frames recorded from the original engine running under emulation, behind the original title card. Use the slider to seek, or ← / → to jump 5 seconds.</p>
+
+    <div class="player-shell">
+      <div class="player-top">
+        <div class="player-id">
+          <span class="rec-dot"></span>
+          <span>CD2 / BROWSER PORT</span>
+          <span class="player-res">320 × 200 · 4:3 · 256 colours</span>
+        </div>
+        <div class="player-tools">
+          <select class="tool" id="trackSel" aria-label="Soundtrack module" title="One of the four .MOD files inside CD2.EXE">
+            <option value="auto">Auto (by scene)</option><option value="Declogue">The Decalogue</option><option value="AmbPower">Ambient Power</option>
+            <option value="Desert-D">Desert Dawn</option><option value="TrnsAtln">Trans Atlantic</option>
+          </select>
+          <button class="tool" id="soundBtn" type="button" aria-pressed="false" title="Play the original module">SOUND OFF</button>
+          <button class="tool" id="crtBtn" type="button" aria-pressed="true" title="Toggle scanlines">CRT ON</button>
+          <button class="tool" id="pauseBtn" type="button" title="Pause or resume">PAUSE</button>
+        </div>
+      </div>
+
+      <div class="screen-wrap" id="screenWrap">
+        <canvas id="demoCanvas" width="320" height="200" aria-label="Recreated Crystal Dream II demo"></canvas>
+        <div class="crt" id="crtOverlay" aria-hidden="true"></div>
+        <div class="screen-hud" id="screenHud">
+          <span id="hudScene">BOOT</span>
+        </div>
+      </div>
+
+      <div class="seek">
+        <span id="hudTime">00:00</span>
+        <div class="seek-track"><input id="seekBar" type="range" min="0" max="100" step="0.1" value="0" aria-label="Seek"><div id="seekMarks"></div></div>
+        <span id="hudTotal">01:40</span>
+      </div>
+
+      <div class="scene-controls" role="group" aria-label="Scene selection">
+        <button data-scene="boot" class="sc active">Boot</button>
+        <button data-scene="plasma" class="sc">Plasma</button>
+        <button data-scene="cube" class="sc">Cube</button>
+        <button data-scene="fractal" class="sc">Fractal</button>
+        <button data-scene="pictures" class="sc">Pictures</button>
+        <button data-scene="earth" class="sc">Earth</button>
+        <button data-scene="chess" class="sc">Chess</button>
+        <button data-scene="end" class="sc">Endpart</button>
+      </div>
+
+      <div class="player-foot">
+        <p><strong>Keys:</strong> <kbd>1</kbd>–<kbd>3</kbd> original start modes (plasma / pictures / endpart) · <kbd>0</kbd> boot · <kbd>4</kbd> cube · <kbd>5</kbd> fractal · <kbd>6</kbd> earth · <kbd>7</kbd> chess · <kbd>L</kbd> loop · <kbd>←</kbd>/<kbd>→</kbd> seek ±5 s · <kbd>Space</kbd> pause · <kbd>M</kbd> mute</p>
+        <p class="fine">The Pictures and Endpart scenes show the original images decoded from CD2.EXE; the music is the original .MOD files. The cube is a replay of recorded frames, not a port of the engine.</p>
+      </div>
+    </div>
+
+    <div class="faith-grid">
+      <div class="faith">
+        <h3>Original data</h3>
+        <ul>
+          <li>The raytraced pictures and the main menu: the original TGAs, 320×400 shown on a 4:3 screen</li>
+          <li>Earth: the original 264-polygon sphere (<code>Earth3.TVO</code>) with the original map texture</li>
+          <li>Chessboard: the original piece and board models, the original marble texture, one moving light</li>
+          <li>Cube: the title card is rendered by the original text routine with the original font, palette and fade timeline; the 3D part is every frame (2,382, about 34 s) of the scene’s own loop (image 0xB41D) executed under emulation with a small VGA model (write modes 0–3, set/reset, latches, colour compare). Frames and per-frame palette are stored delta + deflate (2 MB) and decoded on demand</li>
+          <li>Plasma: the original table, frame renderer, palette routine and phase motion, ported and checked against the routines running under emulation</li>
+          <li>Fractal zoom: the original MegaFrac data, the original scaler’s pixel map (verified pixel-exact against the routine running under emulation), the original sine-wave palette and zoom schedule</li>
+          <li>Music: the four original .MOD files, mixed in the browser; Auto follows the Credits page (Vogue for intro to fractal, LizardKing for chess and endpart)</li>
+          <li>Scene order from the authors’ own list; the “ATTENTION — this is a Triton production” text comes from the binary</li>
+        </ul>
+      </div>
+      <div class="faith">
+        <h3>My look-alikes</h3>
+        <ul>
+          <li>The cube is a replay, not a port: the engine (slab, apexes, intersection, star field) is not reimplemented, so it cannot be changed or run at another resolution. The scene’s music clock is assumed to tick at 50 Hz and the frame rate at 70 fps; the objects are constants inside the code, not <code>SHD_Cube.TVO</code></li>
+          <li>The plasma’s 256 × 133 viewport is inferred from the original screenshots, and its length assumes the music player ticks at 50 Hz (the scene waits for 512 ticks)</li>
+          <li>The fractal’s 70 Hz step rate is an assumption (the loop waits on a retrace counter whose rate I did not determine)</li>
+          <li>The chessboard is a 4×4 board (the board model has 16 top squares and the pieces are 82% of a square). Piece placement is mine, the pieces are not animated, and there is no bishop model in the file</li>
+          <li>Earth’s texture is mapped affinely per polygon and the lighting is flat</li>
+          <li>Which module goes with which scene inside each composer’s pair is my guess; scene durations are mine</li>
+          <li>The endpart cursor marker is mine; the menu logic was not reversed</li>
+        </ul>
+      </div>
+      <div class="faith">
+        <h3>Not reproduced</h3>
+        <ul>
+          <li>The setup screen’s hardware detection and the intro’s performance tester</li>
+          <li>Spacecut, vector scroller, vectorslime and tunnel flight (the data for the latter two is in the archive; the effects are not rebuilt)</li>
+          <li>The information viewer’s scrolling pages (they are shown, as text and images, in “In their own words”)</li>
+          <li>Sound Blaster and Gravis Ultrasound initialisation, and the exact mixer</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== WORDS ============================== -->
+<section class="section alt" id="words">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">08 / In their own words</p>
+      <h2>Six text pages,<br>read from the binary.</h2>
+    </div>
+    <div class="two-col">
+      <div class="prose">
+        <p class="lede">The endpart menu opens six pages: Credits, Greetings, Information, Comments, Messages and Rumours. They are not text. Each line is a list of 4-byte records <code>(glyph offset in the font sheet, destination byte, sub-pixel shift | width&lt;&lt;4)</code> ended by <code>0xFFFF</code>, which the demo blits from a 640-pixel 1-bit sheet (<code>EndFont2.LBM</code>) with a per-pixel rotate. I found that routine (image offset <code>0xFB4</code>) and rendered the pages with the same algorithm.</p>
+        <p>The sheet’s glyph cells are <em>kerning pairs</em> (each cell shows a letter and the start of the next one) and the record’s width crops them, so a record’s character is the first letter of its cell. That mapping turns the pages back into text; <code>tools/render_pages.py</code> does both.</p>
+        <p class="fine">The Information page ends with four home addresses and phone numbers from 1993. They are blanked in both the text and the rendered image below. Greetings lists people by name exactly as the demo does.</p>
+      </div>
+      <aside class="side-card"><h3>What they confirm</h3>
+        <ul class="tracks">
+          <li>Borland Pascal 7.0, 43,800 lines</li>
+          <li>protected mode, not DPMI</li>
+          <li>fractal zoom factor 1,048,576</li>
+          <li>vector editor by Vogue (the “VEC-ED” in the .TVO header)</li>
+          <li>FastTracker by Mr.H</li>
+          <li>the performance tester in the intro</li>
+        </ul>
+      </aside>
+    </div>
+    <details class="page">
+      <summary>Credits <span class="fine">· Scr_Cred.RAW · 52 lines</span></summary>
+      <div class="page-body">
+        <pre class="page-text">
+PROGRAMMING
+
+     ■Vectorfilling
+     ■Musicplayer
+     ■Fractalzoom
+     ■PM-Interface
+
+     by Mr.H
+
+
+     ■Spacecut
+     ■Vectorcalculations
+     ■Vectormovements
+     ■Metamorphing/Plasma/Slime
+     ■&quot;Starwars&quot;-scroller
+     ■Demolayout and eventmixing
+
+     by Vogue
+
+
+
+MUSIC
+
+Music for intro, spacecut
+and fractal/tunnelflight
+by Vogue
+
+Music for chessboard
+and informationviewer by
+LizardKing
+
+
+
+GRAPHICS
+
+The graphics that exists in
+this demo (2 fonts) is drawn
+by Vogue.
+
+Vectorworlds and most objects
+designed by Vogue
+
+Some &quot;standalone&quot;-objects
+designed by Mr.H and Loot</pre>
+        <figure><img src="assets/orig/page_cred.png" alt="Credits page as the demo renders it" loading="lazy"><figcaption>The same page drawn with the demo’s own glyph blits.</figcaption></figure>
+      </div>
+    </details>
+<details class="page">
+      <summary>Information <span class="fine">· Scr_Info.RAW · 137 lines</span></summary>
+      <div class="page-body">
+        <pre class="page-text">
+INFORMATION
+
+The reason why the release of this
+demo was delayed is that Mr.H and
+Loot  just finished their last year
+of the &quot;gymnasium&quot; (senior high-
+school) and that Vogue had to
+study for a math examination in
+calculus.
+    So, Mr.H and Loot have been
+on parties while Vogue has been
+studying math. (Is that fair?)
+
+■■■■■
+
+This demo is designed to run on
+a 486 or faster computer with
+very fast graphics memory. While
+developing this program we asked
+ourself several times if it was wise
+to expect so much from the
+hardware. We did at least come to
+one conclution: &quot;We didn&#x27;t buy
+486-50Mhz for coding 386
+demos.&quot;, and you&#x27;ve probably
+noticed that!
+
+■■■■■
+
+This demo is programmed in
+Borland Pascal 7.0 (Assembler of
+coz) and the sourcecode is 43800
+lines long (about 1Mb). The demo
+runs in protected mode. (NOT
+under a DPMI server.)
+
+■■■■■
+
+For the designing of vectorobjects
+and vectorworlds we used a
+vectoreditor (coded by Vogue).
+(The vectoreditor is not a public
+piece of software.)
+
+■■■■■
+
+The music that is composed by
+Vogue is made in FastTracker
+(coded by Mr.H).
+
+■■■■■
+
+Triton has got a new member:
+The great musician Lizardking.
+(Also active on the Amiga.)
+
+■■■■■
+
+Since no progresses has been made
+on the Amiga scene you should
+forget all bullshit we wrote in
+the end of the endscroller in CD1.
+
+■■■■■
+
+The following parameters for
+running CD2 is available:
+
+  1  -  Run from the plasma
+  2  -  Run from the pictures
+  3  -  Run endpart
+  L  -  Loop until reset
+  H  -  Help on parameters
+
+ADDRESSES:
+
+In case that you have something
+important to inform us about,
+we&#x27;ve included our addresses in
+this demo too. If you just want
+to swap programs, write bullshit,
+get music routines or help with
+VGA-registers, don&#x27;t bother!
+We&#x27;ve recieved lots of letters
+since we released CD1 and some
+(too many) hasn&#x27;t got an answer
+yet. We don&#x27;t mean to be arrogant
+by not responding your letters.
+There&#x27;s simply no time for any
+correspondence!
+
+
+[four home addresses and phone numbers omitted here]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Note:
+Vogue and Mr.H won&#x27;t be located
+on the addresses mentioned
+above since they will move and
+study. It follows that your
+letter will be delayed but sooner
+or latter it&#x27;ll reach it&#x27;s
+destination.</pre>
+        <figure><img src="assets/orig/page_info.png" alt="Information page as the demo renders it" loading="lazy"><figcaption>The same page drawn with the demo’s own glyph blits.</figcaption></figure>
+      </div>
+    </details>
+<details class="page">
+      <summary>Comments <span class="fine">· Scr_Comm.RAW · 223 lines</span></summary>
+      <div class="page-body">
+        <pre class="page-text">
+SETUP
+
+This is an attempt to create a less
+boring and more userfriendly setup.
+Just take a look at the TCC-Intro!
+(No hard feelings Cascada! You did
+at least comment it.)
+
+
+
+INTRO
+
+There&#x27;s a built in performance
+tester in the intro, just to test if
+the machine is fast enough to run
+the demo. If the computer is too
+slow then the program is
+terminated. (This should not happen
+unless you chose a too high mixing-
+rate.)
+    You might think that this is a
+stupid idea, but just imagine the
+chessboard running on a 386
+16Mhz with a Trident 8800 VGA-
+card and high quality stereo-DAC
+music!
+
+
+
+VECTORSCROLLER
+
+There&#x27;s no doubt about it:
+It is impossible to read! (like most
+other similiar scrollers which at
+least was designed to be read.)
+Here&#x27;s the text you didn&#x27;t manage
+to grasp:
+&quot;Greetings to  Cascada  Future
+Crew  Xography  Codeblasters&quot;
+
+
+
+SOME OBJECTS
+
+If you think that the vectorroutine
+is slow,  just consider the 120-150
+polygons the objects are
+constructed from. (Except the
+Football and the transparent cube.)
+
+
+
+SPACECUT
+
+The first routine for polygon
+intersectioning was made by
+Celebrandil of Phenomena for the
+demo &quot;Animotion&quot;.
+   Our routine was coded in summer
+1992 (Some weeks after the
+release of Crystal Dream 1), but
+since we&#x27;re so lazy it has not been
+released.
+
+The routine we use is generalized
+and that is the reason why the
+spacecut is so slow. That means
+that any vectorobject can be cut to
+any other object. This requires
+that the program tests all possible
+polygon-to-polygon intersections
+and that will be a tough task if the
+objects consists of 100 polygons
+each.
+
+For example: If a Cube is cut to
+a dodecaedron then 6*12=72
+intersections must be calculated.
+
+
+
+PLASMA
+
+Very simple but goodlooking.
+
+
+
+FRACTALZOOM
+
+
+You&#x27;ve probably figured out that
+the fractalcalculations aren&#x27;t
+done &quot;realtime&quot;. The only trouble
+is the storing of the image so
+that a zoomfactor of 1048576 is
+available.
+
+
+
+VECTORSLIME
+
+If this event doesn&#x27;t run with 70hz
+screenupdate then it won&#x27;t be
+worth looking at. It would&#x27;ve been
+quite troublesome to make it look
+exactly the same on all computers
+since the drawing of the current
+frame uses previously drawn
+frames.
+
+
+
+TUNNELFLIGHT
+
+This part runs at one vertical
+blanking per screenupdate on our
+486-50&#x27;s and should be runnable
+on most machines.
+The shading on the spaceship is
+not correct, but it looks better
+than if it was. (You know that we
+can do correct shading anyway.)
+
+
+
+RAYTRACED PICTURES
+
+The four raytraced pictures shown
+are all rendered in Vogue&#x27;s and
+Mr.H&#x27;s renders.
+
+ &quot;Podium with vase&quot; and &quot;Sphere-
+ flake&quot; are created by Mr.H.
+
+ &quot;Textured toruses&quot; and &quot;Triton
+ logotype&quot; are created by Vogue
+
+
+
+EARTH
+
+This piece of object is formed by
+264 textured polygons. The
+texture is taken from 3D-studio.
+(If you didn&#x27;t notice that!)
+
+
+
+CHESSBOARD
+
+If you&#x27;re a lucky owner of a
+486-50Mhz with localbus or a
+faster computer this part is a true
+entertainer. If you have a less
+powerful machine the chess-
+sequence will be quite slow, but as
+always, there&#x27;s a reason. Here are
+some facts:
+
+■ The Kings, consists of 201
+    coordinates and 183 faces.
+
+■ The Queen, consists of 189
+    coordinates and 169 faces.
+
+■ The Towers, consists of 181
+    coordinates and 170 faces.
+
+■ The Pawns, consists of 141
+    coordinates and 120 faces.
+
+■ The Knight, consists of 108
+    coordinates and 95 faces.
+
+■ There are 96 marbletextured
+    polygons for the chessboard.
+
+■ The entire scene consists of
+    1837 coordinates and 1628
+    polygons which are all shaded
+    with respect to a moving light-
+    source.
+
+Some of you might have wanted a
+visible lightsource to reveal it&#x27;s
+position. We tried this but it just
+looked ugly. There should also be
+shadows cast from the chess-
+pieces to create optimal realism,
+but the scene is slow enough
+already. (Don&#x27;t worry, next time
+we&#x27;ll do something worse!)
+
+
+
+ENDPART
+
+Triton has a special policy concering
+texts in demos, goes something like
+this : &quot;If you don&#x27;t have anything of
+value to write, don&#x27;t write!&quot;.
+Therefore we thought that this
+information viewer would free
+everyone who is not interested
+from the booring text, and for
+those who wants to read our
+comments, greetings and other
+stuff, it will show the text in
+a readable font and a selfadjusted
+tempo!
+
+The &quot;Crystal Dream II&quot;-logotype
+on the &quot;Main menu&quot;-screen is
+rendered in Vogue&#x27;s raytracer</pre>
+        <figure><img src="assets/orig/page_comm.png" alt="Comments page as the demo renders it" loading="lazy"><figcaption>The same page drawn with the demo’s own glyph blits.</figcaption></figure>
+      </div>
+    </details>
+<details class="page">
+      <summary>Messages <span class="fine">· Scr_Mess.RAW · 81 lines</span></summary>
+      <div class="page-body">
+        <pre class="page-text">
+MESSAGES TO...
+
+
+Advanced Gravis Comp. Technology:
+
+Thank you for the great support
+with ultrasound boards.
+
+
+Software companies:
+
+If you want an intro or game
+programmed, don&#x27;t hesitate to
+contact us.
+
+
+Erik Lundgren:
+
+Thanks for all the great help with
+the protected mode programming.
+
+
+Borland International:
+
+Please add 386-instructions and
+ability to define macros to the
+built-in assembler in the next
+version of Borland Pascal.
+
+
+Iceman of Cascada:
+
+Vogue: - At TCC-93 you explained
+a method for filling shaded texture
+polygons using only four instruc-
+tions per pixel and about 512K of
+memory. Later, on the train home,
+I realized that the method won&#x27;t
+work at all! Contact me if you&#x27;re
+interested in my thoughts.    :-)
+
+
+Robban of Cascada:
+
+Hope you enjoyed the demo
+although you&#x27;re not an owner of a
+localbus computer!
+
+
+Antony Christoulakis / Neon:
+
+Vogue: - Thanks for the videodemo
+you sent me! Maybe I got all the
+inspiration needed for writing a
+vectorbased game. Someday we
+might have a powerful cooperation
+going on!
+
+
+Extreme:
+
+Too bad that the sound in your
+demo didn&#x27;t work in the TCC-
+competition. We think that your
+demo is one of the better on the
+PC-scene for the moment.
+
+
+Xography:
+
+The demopreview you sent us was
+really nice. When will we see the
+final result?</pre>
+        <figure><img src="assets/orig/page_mess.png" alt="Messages page as the demo renders it" loading="lazy"><figcaption>The same page drawn with the demo’s own glyph blits.</figcaption></figure>
+      </div>
+    </details>
+<details class="page">
+      <summary>Rumours about CD2 <span class="fine">· Scr_Rumr.RAW · 77 lines</span></summary>
+      <div class="page-body">
+        <pre class="page-text">
+RUMOURS ABOUT CD2
+
+We&#x27;ve heard and read some
+rumours about our demo before
+it&#x27;s release. Here are some
+comments about them:
+
+
+
+■ Fear/Extreme wrote:
+
+&quot;The deadline was moved to
+18:00 JUST because Triton
+couldn&#x27;t finish their demo
+by the ORIGINAL deadline.
+Shame on you, organizers.&quot;
+
+What a stupid remark!
+We gave the organizers our
+contribution hours before the
+REAL deadline and weren&#x27;t aware
+of the new deadline until later!
+In fact, all deadlines were
+changed!
+
+
+
+■ Fear/Extreme wrote:
+
+&quot;Everything couldn&#x27;t possibly
+be calculated real-time.&quot;
+
+How can you claim that we use
+precalculated tables for our
+vectors, when you don&#x27;t know
+shit about our program?
+
+You see, this happens to be
+totally wrong because there&#x27;s
+not a single table in the whole
+demo containing rotated
+coordinates, shading constants,
+polygon lists, normals, light
+vectors or whatever your
+imagination might figure out!
+
+Have you ever estimated
+the memory needed for pre-
+calculating anything in a
+long vectorsequence?
+
+
+
+■ Read in the CDN:
+
+We noticed some rumours about
+this demo, telling that is would
+need about 11Mb of diskspace!
+Obviously someone has a very
+strange habit of making up things.
+
+Anyway, we hope that you (if
+anyone) who believed in that
+rumour got really happy when you
+realized that the demo only needed
+3Mb of diskspace.</pre>
+        <figure><img src="assets/orig/page_rumr.png" alt="Rumours about CD2 page as the demo renders it" loading="lazy"><figcaption>The same page drawn with the demo’s own glyph blits.</figcaption></figure>
+      </div>
+    </details>
+<details class="page">
+      <summary>Greetings <span class="fine">· Scr_Gret.RAW · 80 lines</span></summary>
+      <div class="page-body">
+        <pre class="page-text">
+Our best regards to:
+
+
+Karolina Adolphson
+Tobias Hill
+Jens Jonsson
+Ube
+Elisabet Wiklund
+Annelie Hamrin
+Paula Sjödin
+Linda Grundström
+Magdalena Bylehn
+Johan Johansson
+Anna Jansson
+Jens Schmith
+Johan Engman
+Gunnar Grundberg
+Anders Nilsson
+Leif Graune
+Marcus Hägglund
+Niklas Forslund
+Robert Aronsson
+Erik Lundgren
+Per Bernhardsson
+Mattias Häggström
+Stephen Trap
+Kris Buytaert
+Niklas Een
+Marcus Comstedt
+Jesper Nilsson
+Andreas Strömbergsson
+Fredrik Hubinette
+Håkan Strömberg
+The Y-section at LiTH
+Marsupilami
+The D-section at LiTH
+Garfield
+Arne P and Christer B
+
+
+Advanced Gravis
+Lagans Datorservice
+Screen Artists
+
+
+Alcatraz
+Andromeda
+Bollox
+Cascada
+Circle
+Crusaders
+Extreme
+Future Crew
+Horizon
+Infinity
+Light
+Noxious
+Orbital
+Phenomena
+Razor 1911
+Reflex
+Renaissance
+Silents
+Space Balls
+The Codeblasters
+The Spacepigs
+The Spaceracers
+Virtual
+Xography
+X-trade</pre>
+        <figure><img src="assets/orig/page_gret.png" alt="Greetings page as the demo renders it" loading="lazy"><figcaption>The same page drawn with the demo’s own glyph blits.</figcaption></figure>
+      </div>
+    </details>
+
+  </div>
+</section>
+
+<!-- ============================== APPENDIX ============================== -->
+<section class="section" id="appendix">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">09 / Field notes</p>
+      <h2>How this was taken apart.</h2>
+    </div>
+
+    <div class="method-grid">
+      <div class="method">
+        <span class="step">A</span>
+        <h3>Read the header by hand</h3>
+        <p>Python unpacked the MZ fields. The wrap trick and the 79,177-byte module size came out of the numbers, not a tool.</p>
+      </div>
+      <div class="method">
+        <span class="step">B</span>
+        <h3>Emulate the unpacker</h3>
+        <p>Unicorn runs the real-mode stub (<code>tools/unpack.py</code>), stops at the final <code>retf</code> and dumps the unpacked image to <code>tools/img.bin</code>. Reproducible with <code>pip install unicorn</code>.</p>
+      </div>
+      <div class="method">
+        <span class="step">C</span>
+        <h3>Disassemble the dump</h3>
+        <p><code>ndisasm -b16</code> on the image, then byte-pattern scans: <code>mov dx,0x3C4</code> (96 hits), <code>rep stosd</code> (19), <code>shrd</code> (8), <code>lgdt</code>/<code>mov cr0</code>. Dense 32-bit regions were read by hand; the Borland copyright string located the runtime.</p>
+      </div>
+      <div class="method">
+        <span class="step">D</span>
+        <h3>Frames from the original</h3>
+        <p>The stills in <code>assets/</code> were captured earlier from the running original under DOSBox. I could not re-run it in this verification pass, so treat them as unaudited.</p>
+      </div>
+      <div class="method">
+        <span class="step">E</span>
+        <h3>Follow the demo’s own file opener</h3>
+        <p>The Pascal <code>Assign</code>/<code>Reset</code> of an overlay file led (image <code>0x2FAF2</code>) to the routine that opens the EXE itself, seeks to <code>EOF − 6</code>, reads a count and a 21-byte-per-entry directory. XOR keys <code>0x55</code> (directory) and <code>0x5A</code> + a 64-byte ramp (data) were found by brute force and confirmed by every file’s own signature.</p>
+      </div>
+      <div class="method">
+        <span class="step">F</span>
+        <h3>Reverse the text blitter</h3>
+        <p>The menu code (image <code>0x1230</code>–<code>0x13E0</code>) walks 4-byte records and calls <code>0xFB4</code>, an unrolled 1-bit blitter with a per-pixel rotate. Re-implementing it in Python and labelling the font cells gave back the text of all six pages.</p>
+      </div>
+      <div class="method">
+        <span class="step">G</span>
+        <h3>Check counts against the authors</h3>
+        <p>The Comments page gives vertex and polygon counts (King 201/183, Pawn 141/120, Knight 108/95, Queen 189/169). The <code>.TVO</code> section sizes reproduce them, which is how the object format was validated.</p>
+      </div>
+      <div class="method">
+        <span class="step">H</span>
+        <h3>Run the demo’s own scaler</h3>
+        <p>The fractal routine reads a table that the demo loads from the last 16&nbsp;KB of <code>MegaFrac.DAT</code>. With that table, the eight 64&nbsp;KB tiles and a log column map as inputs, <code>tools/run_fractal.py</code> executes the unmodified routine under Unicorn; <code>extract_fractal_map.py</code> then records each output pixel’s source and checks its closed form against the emulator (0 mismatches).</p>
+      </div>
+      <div class="method">
+        <span class="step">I</span>
+        <h3>Run the plasma</h3>
+        <p>Three small routines (table builder, 0x3A82 frame, 0x3A10 palette) run under Unicorn in <code>tools/run_plasma.py</code>; the Python and JavaScript ports are compared with them (table: 0 of 1,024 entries differ, frames and palettes: 0 mismatches), and the browser canvas is checked pixel by pixel against the Python port.</p>
+      </div>
+
+
+
+    </div>
+
+    <div class="two-col narrow appendix-tables">
+      <div class="table-card">
+        <div class="table-head"><h3>Ports and vectors found</h3></div>
+        <table class="compact">
+          <tr><td><code>0x3C4/0x3C5</code></td><td>Mode X plane select</td></tr>
+          <tr><td><code>0x3C8/0x3C9</code></td><td>DAC index / RGB data</td></tr>
+          <tr><td><code>0x3D4/0x3D5</code></td><td>CRTC start address</td></tr>
+          <tr><td><code>0x3DA</code></td><td>vertical retrace status</td></tr>
+          <tr><td><code>INT 2F 4300</code></td><td>XMS detection</td></tr>
+          <tr><td><code>INT 2F 4310</code></td><td>XMS driver entry</td></tr>
+        </table>
+      </div>
+      <div class="table-card">
+        <div class="table-head"><h3>Key file offsets</h3></div>
+        <table class="compact">
+          <tr><td><code>0x00</code></td><td>MZ header (96 bytes)</td></tr>
+          <tr><td><code>0x60</code></td><td>first loader instruction</td></tr>
+          <tr><td><code>0xA4</code></td><td>588-byte unpacker blob</td></tr>
+          <tr><td><code>0x135A9</code></td><td>overlay blob begins</td></tr>
+          <tr><td><code>img 0x151</code></td><td>entry point in unpacked image</td></tr>
+          <tr><td><code>img 0x2F03E</code></td><td>real ↔ protected switch</td></tr>
+          <tr><td><code>img 0x30545</code></td><td>CRTC page flip</td></tr>
+          <tr><td><code>img 0x2FAF2</code></td><td>archive opener (reads the directory at EOF)</td></tr>
+          <tr><td><code>img 0xFB4</code></td><td>text-page glyph blitter</td></tr>
+          <tr><td><code>img 0x7FB1</code></td><td>fractal-strip column scaler (4 plane passes)</td></tr>
+          <tr><td><code>img 0x22EAF</code></td><td>polygon span fill</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="refs">
+      <h3>References &amp; further reading</h3>
+      <ul>
+        <li><a href="https://demozoo.org/productions/175/" target="_blank" rel="noopener">Demozoo — Crystal Dream II</a> (release 30 May 1993, 1st PC demo at The Computer Crossroads 1993, credits)</li>
+        <li><a href="https://www.pouet.net/prod.php?which=462" target="_blank" rel="noopener">pouët.net — Crystal Dream 2</a></li>
+        <li><a href="https://en.wikipedia.org/wiki/Triton_(demogroup)" target="_blank" rel="noopener">Wikipedia — Triton (demogroup)</a> (gives June 1993; Demozoo gives 30 May)</li>
+        <li><a href="tools/unpack.py">tools/unpack.py</a> · <a href="tools/gen_asm.py">tools/gen_asm.py</a> — reproduce the image and the listings</li>
+        <li><a href="CD2.EXE" download>CD2.EXE — original release binary (3,154,579 bytes)</a></li>
+      </ul>
+    </div>
+
+    <p class="colophon">Built as an exercise in reading old binaries. <em>Crystal Dream II</em> remains the work of Triton; this page is an independent study and tribute. The original executable is included alongside this page for preservation and research.</p>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap foot-inner">
+    <span>CD2 / FIELD NOTES</span>
+    <span>320×200 · 256 colours · one more frame</span>
+    <a href="#top">Back to top ↑</a>
+  </div>
+</footer>
+
+<script src="js/modplayer.js"></script>
+<script src="js/demo3d.js"></script>
+<script src="js/demo.js"></script>
+<script src="js/site.js"></script>
+</body>
+</html>
