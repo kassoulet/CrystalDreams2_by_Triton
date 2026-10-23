@@ -246,6 +246,7 @@
      ------------------------------------------------------------ */
   const SCENES = {
     boot:     { dur: 7,  label: "BOOT" },
+    intro:    { dur: 2150 / 70, label: "INTRO" },
     plasma:   { dur: 11.5, label: "PLASMA" },
     cube:     { dur: 39.5, label: "MAGIC CUBE" },
     fractal:  { dur: 29, label: "FRACTAL ZOOM" },
@@ -258,7 +259,7 @@
   };
   // Order follows the authors' own list on the Comments page (CD2.EXE, Scr_Comm): intro, objects/spacecut,
   // plasma, fractal zoom, raytraced pictures, earth, chessboard, endpart. Durations are mine.
-  const ORDER = ["boot", "cube", "plasma", "fractal", "slime", "tunnel", "pictures", "earth", "chess", "end"];
+  const ORDER = ["boot", "intro", "cube", "plasma", "fractal", "slime", "tunnel", "pictures", "earth", "chess", "end"];
 
   let scene = "boot";
   let sceneT = 0;
@@ -414,57 +415,61 @@
     }
     for (let i = 0; i < 64000; i++) px[i] = TT.pal[TT.idx[i]];
   }
-  /* ---- 3D part: frames recorded from the demo's own engine (tools/run_cube.py -> tools/export_cube.py) ----
-     The scene loop (image 0xB41D) ran under emulation with a small VGA model; each frame is the 16-colour page at the
-     flip, with the DAC palette. They are stored as 35-frame chunks (delta + deflate) and decoded on demand. */
-  const CB = { state: 0, n: 0, chunkN: 35, offs: null, buf: null, cache: new Map(), pending: new Set(), last: null };
-  function cubeLoad() {
-    if (CB.state) return;
-    CB.state = 1;
-    fetch("assets/orig/cube_frames.bin").then(r => r.arrayBuffer()).then(ab => {
-      const dv = new DataView(ab);
-      CB.n = dv.getUint16(4, true); CB.chunkN = dv.getUint16(6, true); const nc = dv.getUint16(8, true);
-      CB.offs = []; for (let i = 0; i <= nc; i++) CB.offs.push(dv.getUint32(10 + 4 * i, true));
-      CB.buf = ab; CB.state = 2;
-    });
-  }
-  async function cubeDecode(c) {
-    const blob = new Uint8Array(CB.buf, CB.offs[c], CB.offs[c + 1] - CB.offs[c]);
-    const ab = await new Response(new Blob([blob]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer();
-    const d = new Uint8Array(ab), n = Math.min(CB.chunkN, CB.n - c * CB.chunkN), pal = d.subarray(0, n * 48);
-    const frames = new Uint8Array(n * 32000);
-    frames.set(d.subarray(n * 48, n * 48 + 32000), 0);
-    for (let i = 1; i < n; i++) {
-      const o = n * 48 + i * 32000, a = (i - 1) * 32000, b = i * 32000;
-      for (let k = 0; k < 32000; k++) frames[b + k] = frames[a + k] ^ d[o + k];
+  /* ---- 16-colour clips: frames recorded from the demo's own scenes under emulation (tools/run_cube.py, tools/run_intro.py -> tools/export_cube.py) ----
+     The scene loop ran with a small VGA model; each frame is the 16-colour page at the flip, with the DAC palette. They are stored
+     as 35-frame chunks (delta + deflate) and decoded on demand. */
+  function nibbleClip(url) {
+    const C = { url, state: 0, n: 0, chunkN: 35, offs: null, buf: null, cache: new Map(), pending: new Set(), keep: null };
+    const pal16 = new Uint32Array(16);
+    C.load = function () {
+      if (C.state) return;
+      C.state = 1;
+      fetch(url).then(r => r.arrayBuffer()).then(ab => {
+        const dv = new DataView(ab);
+        C.n = dv.getUint16(4, true); C.chunkN = dv.getUint16(6, true); const nc = dv.getUint16(8, true);
+        C.offs = []; for (let i = 0; i <= nc; i++) C.offs.push(dv.getUint32(10 + 4 * i, true));
+        C.buf = ab; C.state = 2;
+      });
+    };
+    async function decode(c) {
+      const blob = new Uint8Array(C.buf, C.offs[c], C.offs[c + 1] - C.offs[c]);
+      const ab = await new Response(new Blob([blob]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer();
+      const d = new Uint8Array(ab), n = Math.min(C.chunkN, C.n - c * C.chunkN), pal = d.subarray(0, n * 48);
+      const frames = new Uint8Array(n * 32000);
+      frames.set(d.subarray(n * 48, n * 48 + 32000), 0);
+      for (let i = 1; i < n; i++) {
+        const o = n * 48 + i * 32000, a = (i - 1) * 32000, b = i * 32000;
+        for (let k = 0; k < 32000; k++) frames[b + k] = frames[a + k] ^ d[o + k];
+      }
+      C.cache.set(c, { n, pal, frames });
+      if (C.cache.size > 6) C.cache.delete(C.cache.keys().next().value);
+      C.pending.delete(c);
     }
-    CB.cache.set(c, { n, pal, frames });
-    if (CB.cache.size > 6) CB.cache.delete(CB.cache.keys().next().value);
-    CB.pending.delete(c);
+    function chunk(c) {
+      if (c < 0 || c * C.chunkN >= C.n) return null;
+      const e = C.cache.get(c);
+      if (e) return e;
+      if (!C.pending.has(c)) { C.pending.add(c); decode(c); }
+      return null;
+    }
+    C.draw = function (f) {
+      if (C.state !== 2) { clear(0); return; }
+      f = Math.min(C.n - 1, Math.max(0, f));
+      const c = (f / C.chunkN) | 0, e = chunk(c);
+      chunk(c + 1);
+      if (e) {
+        const i = f - c * C.chunkN;
+        for (let q = 0; q < 16; q++) pal16[q] = fracDACto32(e.pal[i * 48 + q * 3], e.pal[i * 48 + q * 3 + 1], e.pal[i * 48 + q * 3 + 2]);
+        const fr = e.frames.subarray(i * 32000, (i + 1) * 32000);
+        for (let k = 0; k < 32000; k++) { const v = fr[k]; px[2 * k] = pal16[v >> 4]; px[2 * k + 1] = pal16[v & 15]; }
+        if (!C.keep) C.keep = new Uint32Array(64000);
+        C.keep.set(px);
+      } else if (C.keep) px.set(C.keep); else clear(0);        // chunk still decoding: keep the previous frame
+    };
+    return C;
   }
-  function cubeChunk(c) {
-    if (c < 0 || c * CB.chunkN >= CB.n) return null;
-    const e = CB.cache.get(c);
-    if (e) return e;
-    if (!CB.pending.has(c)) { CB.pending.add(c); cubeDecode(c); }
-    return null;
-  }
-  const cubePal = new Uint32Array(16);
-  function draw3dFrame(f) {
-    if (CB.state !== 2) { clear(0); return; }
-    f = Math.min(CB.n - 1, Math.max(0, f));
-    const c = (f / CB.chunkN) | 0, e = cubeChunk(c);
-    cubeChunk(c + 1);
-    if (e) {
-      const i = f - c * CB.chunkN;
-      for (let q = 0; q < 16; q++) cubePal[q] = fracDACto32(e.pal[i * 48 + q * 3], e.pal[i * 48 + q * 3 + 1], e.pal[i * 48 + q * 3 + 2]);
-      const fr = e.frames.subarray(i * 32000, (i + 1) * 32000);
-      for (let k = 0; k < 32000; k++) { const v = fr[k]; px[2 * k] = cubePal[v >> 4]; px[2 * k + 1] = cubePal[v & 15]; }
-      CB.last = f;
-      if (!CB.keep) CB.keep = new Uint32Array(64000);
-      CB.keep.set(px);
-    } else if (CB.keep) px.set(CB.keep); else clear(0);        // chunk still decoding: keep the previous frame
-  }
+  const CUBE3D = nibbleClip("assets/orig/cube_frames.bin"), INTRO = nibbleClip("assets/orig/intro_frames.bin");
+  function draw3dFrame(f) { CUBE3D.draw(f); }
   /* ---------- vectorslime and tunnel flight: frames recorded from the demo's own scene procedures ----------
      tools/run_slime.py and tools/run_tunnel.py run the procedures (image 0x248b and 0xBA92) under emulation, loading their
      objects through the demo's own archive reader; each frame is the 320x200 256-colour screen at the retrace/flip call plus
@@ -519,7 +524,7 @@
   function initTunnel() { TUNNEL.load(); resetStars(0); }
   function drawSlime(t) { SLIME.draw(t); }
   function drawTunnel(t) { TUNNEL.draw(t); }
-  function initCube() { titleLoad(); cubeLoad(); resetStars(0); }
+  function initCube() { titleLoad(); CUBE3D.load(); resetStars(0); }
   function drawCube(t) { if (t < TITLE_T) drawTitle(t); else draw3dFrame(Math.floor((t - TITLE_T) * 70)); }
 
   /* ---------- fractal zoom: the original data, the original scaler's pixel map, the original palette ----------
@@ -702,6 +707,7 @@
     sceneT = 0;
     frame = 0;
     if (name === "boot") initBoot();
+    else if (name === "intro") { INTRO.load(); resetStars(0); }
     else if (name === "plasma") initPlasma();
     else if (name === "cube") initCube();
     else if (name === "fractal") initFractal();
@@ -793,7 +799,7 @@
 
   // Scenes the original shows inside a centred 256x133 window: the whole 320x200 frame is scaled by 0.8 x 2/3
   // (measured on the original screenshots; it gives square pixels on a 4:3 screen).
-  const WINDOWED = new Set(["plasma", "fractal", "cube", "slime", "tunnel"]);
+  const WINDOWED = new Set(["plasma", "fractal", "cube", "slime", "tunnel", "intro"]);
   const winSrc = new Uint32Array(W * H);
   function presentWindow() {
     winSrc.set(px); px.fill(0xff000000);
@@ -805,6 +811,7 @@
   function render(dt) {
     const t = sceneT;
     if (scene === "boot") drawBoot(t);
+    else if (scene === "intro") INTRO.draw(Math.floor(t * 70));
     else if (scene === "plasma") drawPlasma(t);
     else if (scene === "cube") drawCube(t);
     else if (scene === "fractal") drawFractal(t, dt);

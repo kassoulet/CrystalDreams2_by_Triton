@@ -66,7 +66,11 @@ def call(c, ip, limit=500_000_000, stop=None, cs=None):
     mu = c.mu; sp = 0xA000
     for w in (0x1000, 0xBEEF): sp -= 2; c.w16(SS, sp, w)
     mu.reg_write(UC_X86_REG_SS, SS); mu.reg_write(UC_X86_REG_SP, sp); mu.reg_write(UC_X86_REG_BP, 0xFF00); mu.reg_write(UC_X86_REG_DS, DS); mu.reg_write(UC_X86_REG_ES, DS)
-    c.run_until(cs or CS, ip, 0x1000, 0xBEEF, count=limit)
+    pos = (cs or CS, ip)
+    while True:                                                          # a retrace wait (frame hook) ends run_until early: resume until the procedure returns
+        c.run_until(pos[0], pos[1], 0x1000, 0xBEEF, count=limit)
+        if c._stopped: break
+        pos = c._resume
 
 def prepare():
     c = Slime(); init_files(c); mu = c.mu

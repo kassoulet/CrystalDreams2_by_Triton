@@ -45,7 +45,7 @@ class VGA:
         gc = self.gc; mode = gc[5] & 3; func = (gc[3] >> 3) & 3; rot = gc[3] & 7; bm = gc[8]
         mm = self.seq[2] & 0xF
         b &= 0xFF
-        if rot: b = ((b >> rot) | (b << (8 - rot))) & 0xFF
+        if rot and mode in (0, 3): b = ((b >> rot) | (b << (8 - rot))) & 0xFF      # the barrel shifter acts on write modes 0 and 3 only
         for p in range(4):
             if not (mm >> p) & 1: continue
             lat = self.latch[p]

@@ -16,7 +16,7 @@ class Tunnel(S.Slime):
     def __init__(self):
         super().__init__()
         self.heap = 0x6E30                                    # the engine addresses its tables as SS:xxxx (SS = DS in the original): keep the whole 64 KB window of SS (5E20h..6E1Fh) out of the heap
-        self.vga = VGA(); self.vga_toggle = 0; mu = self.mu
+        self.vga = VGA(); self.vga_toggle = 0; mu = self.mu; self.dac = bytearray(768); self.dac_i = 0
         mu.hook_add(UC_HOOK_INSN, self._in, None, 1, 0, UC_X86_INS_IN)
         mu.hook_add(UC_HOOK_INSN, self._out, None, 1, 0, UC_X86_INS_OUT)
         mu.hook_add(UC_HOOK_MEM_WRITE, self._vw, None, 0xA0000, 0xAFFFF)
@@ -29,8 +29,15 @@ class Tunnel(S.Slime):
     def _fix_text_dest(self):
         mu = self.mu; sp = mu.reg_read(UC_X86_REG_SP); ss = mu.reg_read(UC_X86_REG_SS)
         if self.r16(ss, sp + 0xe) == 0x30: self.w16(ss, sp + 0xe, P0)
-    def _frame(self, mu): self.flip_hit = True; self.flip_arg = None; self._ret_far(mu, 0)
-    def _flip(self, mu): self.flip_hit = True; self.flip_arg = self._args(mu, 1)[0]; self._ret_far(mu, 2)
+    def _upload(self):                      # what the retrace/flip calls do (3d0d:3569): copy the pending palette entries [6684] from DS:EE00 to the DAC
+        n = self.ds16(0x6684)
+        if n: self.dac[:3 * n] = bytes(self.mu.mem_read(DS * 16 + 0xee00, 3 * n)); self.set_ds16(0x6684, 0)
+    def _out(self, mu, port, size, val, ud):
+        if port == 0x3c8: self.dac_i = (val & 255) * 3
+        elif port == 0x3c9: self.dac[self.dac_i % 768] = val & 63; self.dac_i += 1
+        else: super()._out(mu, port, size, val, ud)
+    def _frame(self, mu): self._upload(); self.flip_hit = True; self.flip_arg = None; self._ret_far(mu, 0)
+    def _flip(self, mu): self._upload(); self.flip_hit = True; self.flip_arg = self._args(mu, 1)[0]; self._ret_far(mu, 2)
 
 def image_x(vga, start):
     out = np.zeros((200, 320), np.uint8)
@@ -66,7 +73,7 @@ def record(nframes, tick_hz=50.0, fps=70.0, per_frame_limit=200_000_000):
         if not c.flip_hit: print('frame', f, 'scene returned'); break
         pos = c._resume
         start = c.flip_arg if c.flip_arg is not None else (A[-1] if A else 0)
-        A.append(start); F.append(image_x(c.vga, start)); P.append(np.frombuffer(bytes(mu.mem_read(DS * 16 + 0xee00, 768)), np.uint8).copy()); T.append(c.ds16(0x667e))
+        A.append(start); F.append(image_x(c.vga, start)); P.append(np.frombuffer(bytes(c.dac), np.uint8).copy()); T.append(c.ds16(0x667e))
         if f % int(os.environ.get('PRINT_EVERY', 100)) == 0: print('frame', f, 'tick', T[-1], 'dist', c.ds16(0xcfd8), 'pos', hex(c._resume[1]), flush=True)
     return np.array(F), np.array(P).reshape(-1, 256, 3), np.array(T), np.array(A)
 
