@@ -253,8 +253,8 @@
     slime:    { dur: 1136 / 70, label: "VECTORSLIME" },
     tunnel:   { dur: 4750 / 70, label: "TUNNEL FLIGHT" },
     pictures: { dur: 20, label: "PICTURES" },
-    earth:    { dur: 14, label: "EARTH" },
-    chess:    { dur: 24, label: "CHESSBOARD" },
+    earth:    { dur: (471 + 1567) / 70, label: "EARTH" },        // frame counts of the original procedures 18e1:0427 and 18e1:0687 run under emulation (retrace counter 70 Hz)
+    chess:    { dur: 8526 / 70, label: "CHESSBOARD" },       // 11c1:02ed ran 8,526 frames to its closing fade under emulation
     end:      { dur: 20, label: "ENDPART" }
   };
   // Order follows the authors' own list on the Comments page (CD2.EXE, Scr_Comm): intro, objects/spacecut,
