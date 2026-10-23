@@ -844,10 +844,10 @@
   <div class="wrap">
     <div class="section-head">
       <p class="kicker">07 / The recreation</p>
-      <h2>Same resolution.<br>A look-alike, not a port.</h2>
+      <h2>Same resolution.<br>Ports and replays.</h2>
     </div>
 
-    <p class="section-lede">A 320×200 indexed framebuffer, a 256-colour palette, palette fades, and a scene clock — rebuilt in JavaScript. No original code is executed. Pictures, menu, plasma, fractal zoom, Earth and chess models, textures and music are the original decoded data; the cube scene replays 2,382 frames recorded from the original engine running under emulation, behind the original title card. Use the slider to seek, or ← / → to jump 5 seconds.</p>
+    <p class="section-lede">A 320×200 indexed framebuffer, a 256-colour palette, palette fades, and a scene clock, in JavaScript. Nothing from the original runs in your browser, but the scenes come in two kinds. Plasma, fractal zoom, Earth, chessboard, pictures and menu are my ports of the original routines, models and images. The intro, cube, vectorslime and tunnel flight are replays: every frame was recorded from the demo’s own scene procedure running under emulation on my machine, and the player only decodes them. The music is the original .MOD files. Use the slider to seek, or ← / → to jump 5 seconds.</p>
 
     <div class="player-shell">
       <div class="player-top">
@@ -1663,6 +1663,11 @@ X-trade</pre>
         <span class="step">I</span>
         <h3>Run the plasma</h3>
         <p>Three small routines (table builder, 0x3A82 frame, 0x3A10 palette) run under Unicorn in <code>tools/run_plasma.py</code>; the Python and JavaScript ports are compared with them (table: 0 of 1,024 entries differ, frames and palettes: 0 mismatches), and the browser canvas is checked pixel by pixel against the Python port.</p>
+      </div>
+      <div class="method">
+        <span class="step">J</span>
+        <h3>Record whole scenes</h3>
+        <p>Where a scene was too tangled to port (the 3D engine with its self-generated scanline code, the VGA latch tricks of the intro), I ran the scene procedure itself under Unicorn instead. The harness fakes only what the demo gets from its surroundings: a heap (<code>GetMem</code>/<code>FreeMem</code>), DOS file calls answered from <code>CD2.EXE</code> so the demo’s own archive reader loads its objects, the retrace and music counters, a small VGA model (write modes 0–3, latches, colour compare, a DAC) and the palette upload. Each retrace or page flip records the screen and the palette. Four scenes were done this way (<code>tools/run_cube.py</code>, <code>run_intro.py</code>, <code>run_slime.py</code>, <code>run_tunnel.py</code>). Getting there meant finding what the real start-up leaves behind: the unit initialisation chain at <code>1000:0151</code>, the video selector <code>30h</code> hard-coded in many places, and the stack segment doubling as a data segment.</p>
       </div>
 
 
