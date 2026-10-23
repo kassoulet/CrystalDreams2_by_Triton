@@ -252,7 +252,7 @@
     fractal:  { dur: 29, label: "FRACTAL ZOOM" },
     slime:    { dur: 1136 / 70, label: "VECTORSLIME" },
     tunnel:   { dur: 4750 / 70, label: "TUNNEL FLIGHT" },
-    pictures: { dur: 20, label: "PICTURES" },
+    pictures: { dur: 4 * 432 / 70, label: "PICTURES" },
     earth:    { dur: (471 + 1567) / 70, label: "EARTH" },        // frame counts of the original procedures 18e1:0427 and 18e1:0687 run under emulation (retrace counter 70 Hz)
     chess:    { dur: 8526 / 70, label: "CHESSBOARD" },       // 11c1:02ed ran 8,526 frames to its closing fade under emulation
     end:      { dur: 20, label: "ENDPART" }
@@ -629,7 +629,7 @@
     setTall(true);
   }
   function drawPicture(t) {
-    const per = 5.0;
+    const per = 432 / 70;                          // each picture stays 431-433 frames in the original (133e:01EA, 0277, 032C, 03E1 under emulation)
     const i = Math.floor(t / per) % PICTURES.length;
     const local = t % per;
     const alpha = clamp(Math.min(local / 0.9, (per - local) / 0.9), 0, 1);
