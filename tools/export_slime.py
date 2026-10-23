@@ -1,10 +1,10 @@
 """Pack the recorded Vectorslime frames (tools/run_slime.py output) into assets/orig/slime_frames.bin.
 Layout: 'CD2S', u16 nframes, u16 frames_per_chunk, u16 nchunks, u32 offsets[nchunks+1];
 each chunk = raw deflate of n x [768-byte DAC palette (6-bit) XOR previous frame's] + n x [64000-byte frame XOR previous frame's]
-(each chunk starts from zeros, so it decodes alone).   Usage: export_slime.py frames.npz OUT.bin"""
+(each chunk starts from zeros, so it decodes alone).   Usage: export_slime.py frames.npz OUT.bin [nframes]   (also used for the tunnel flight: run_tunnel.py output)"""
 import sys, struct, zlib
 import numpy as np
-d = np.load(sys.argv[1]); F = d['frames'].reshape(-1, 64000); P = d['palettes'].reshape(-1, 768); N = len(F); CH = 30
+d = np.load(sys.argv[1]); F = d['frames'].reshape(-1, 64000); P = d['palettes'].reshape(-1, 768); N = int(sys.argv[3]) if len(sys.argv) > 3 else len(F); CH = 30
 blobs = []
 for c in range(0, N, CH):
     n = min(CH, N - c); pp = np.zeros(768, np.uint8); fp = np.zeros(64000, np.uint8); body = bytearray()

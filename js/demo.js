@@ -250,6 +250,7 @@
     cube:     { dur: 39.5, label: "MAGIC CUBE" },
     fractal:  { dur: 29, label: "FRACTAL ZOOM" },
     slime:    { dur: 1136 / 70, label: "VECTORSLIME" },
+    tunnel:   { dur: 4750 / 70, label: "TUNNEL FLIGHT" },
     pictures: { dur: 20, label: "PICTURES" },
     earth:    { dur: 14, label: "EARTH" },
     chess:    { dur: 24, label: "CHESSBOARD" },
@@ -257,7 +258,7 @@
   };
   // Order follows the authors' own list on the Comments page (CD2.EXE, Scr_Comm): intro, objects/spacecut,
   // plasma, fractal zoom, raytraced pictures, earth, chessboard, endpart. Durations are mine.
-  const ORDER = ["boot", "cube", "plasma", "fractal", "slime", "pictures", "earth", "chess", "end"];
+  const ORDER = ["boot", "cube", "plasma", "fractal", "slime", "tunnel", "pictures", "earth", "chess", "end"];
 
   let scene = "boot";
   let sceneT = 0;
@@ -464,52 +465,60 @@
       CB.keep.set(px);
     } else if (CB.keep) px.set(CB.keep); else clear(0);        // chunk still decoding: keep the previous frame
   }
-  /* ---------- vectorslime: frames recorded from the demo's own scene (tools/run_slime.py -> tools/export_slime.py) ----------
-     The Vectorslime procedure (image 0x248b) ran under emulation, loading shd_cube.tvo through the demo's own archive reader;
-     each frame is the 320x200 256-colour screen at the retrace call plus the DAC palette. 30-frame chunks, XOR delta + deflate. */
-  const SL = { state: 0, n: 0, chunkN: 30, offs: null, buf: null, cache: new Map(), pending: new Set(), keep: null };
-  function slimeLoad() {
-    if (SL.state) return;
-    SL.state = 1;
-    fetch("assets/orig/slime_frames.bin").then(r => r.arrayBuffer()).then(ab => {
-      const dv = new DataView(ab);
-      SL.n = dv.getUint16(4, true); SL.chunkN = dv.getUint16(6, true); const nc = dv.getUint16(8, true);
-      SL.offs = []; for (let i = 0; i <= nc; i++) SL.offs.push(dv.getUint32(10 + 4 * i, true));
-      SL.buf = ab; SL.state = 2;
-    });
-  }
-  async function slimeDecode(c) {
-    const blob = new Uint8Array(SL.buf, SL.offs[c], SL.offs[c + 1] - SL.offs[c]);
-    const d = new Uint8Array(await new Response(new Blob([blob]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
-    const n = Math.min(SL.chunkN, SL.n - c * SL.chunkN), pal = d.slice(0, n * 768), fr = d.slice(n * 768);
-    for (let i = 1; i < n; i++) {
-      for (let k = 0; k < 768; k++) pal[i * 768 + k] ^= pal[(i - 1) * 768 + k];
-      for (let k = 0; k < 64000; k++) fr[i * 64000 + k] ^= fr[(i - 1) * 64000 + k];
+  /* ---------- vectorslime and tunnel flight: frames recorded from the demo's own scene procedures ----------
+     tools/run_slime.py and tools/run_tunnel.py run the procedures (image 0x248b and 0xBA92) under emulation, loading their
+     objects through the demo's own archive reader; each frame is the 320x200 256-colour screen at the retrace/flip call plus
+     the DAC palette. tools/export_slime.py packs them in 30-frame chunks (XOR delta + deflate), decoded on demand here. */
+  function frameClip(url) {
+    const C = { url, state: 0, n: 0, chunkN: 30, offs: null, buf: null, cache: new Map(), pending: new Set(), keep: null };
+    C.load = function () {
+      if (C.state) return;
+      C.state = 1;
+      fetch(url).then(r => r.arrayBuffer()).then(ab => {
+        const dv = new DataView(ab);
+        C.n = dv.getUint16(4, true); C.chunkN = dv.getUint16(6, true); const nc = dv.getUint16(8, true);
+        C.offs = []; for (let i = 0; i <= nc; i++) C.offs.push(dv.getUint32(10 + 4 * i, true));
+        C.buf = ab; C.state = 2;
+      });
+    };
+    async function decode(c) {
+      const blob = new Uint8Array(C.buf, C.offs[c], C.offs[c + 1] - C.offs[c]);
+      const d = new Uint8Array(await new Response(new Blob([blob]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+      const n = Math.min(C.chunkN, C.n - c * C.chunkN), pal = d.slice(0, n * 768), fr = d.slice(n * 768);
+      for (let i = 1; i < n; i++) {
+        for (let k = 0; k < 768; k++) pal[i * 768 + k] ^= pal[(i - 1) * 768 + k];
+        for (let k = 0; k < 64000; k++) fr[i * 64000 + k] ^= fr[(i - 1) * 64000 + k];
+      }
+      C.cache.set(c, { n, pal, fr });
+      if (C.cache.size > 5) C.cache.delete(C.cache.keys().next().value);
+      C.pending.delete(c);
     }
-    SL.cache.set(c, { n, pal, fr });
-    if (SL.cache.size > 5) SL.cache.delete(SL.cache.keys().next().value);
-    SL.pending.delete(c);
+    function chunk(c) {
+      if (c < 0 || c * C.chunkN >= C.n) return null;
+      const e = C.cache.get(c);
+      if (e) return e;
+      if (!C.pending.has(c)) { C.pending.add(c); decode(c); }
+      return null;
+    }
+    C.draw = function (t) {
+      if (C.state !== 2) { clear(0); return; }
+      const f = Math.min(C.n - 1, Math.max(0, Math.floor(t * 70))), c = (f / C.chunkN) | 0, e = chunk(c);
+      chunk(c + 1);
+      if (!e) { if (C.keep) px.set(C.keep); else clear(0); return; }
+      const i = f - c * C.chunkN, pal = new Uint32Array(256);
+      for (let q = 0; q < 256; q++) pal[q] = fracDACto32(e.pal[i * 768 + q * 3], e.pal[i * 768 + q * 3 + 1], e.pal[i * 768 + q * 3 + 2]);
+      const fr = e.fr.subarray(i * 64000, (i + 1) * 64000);
+      for (let k = 0; k < 64000; k++) px[k] = pal[fr[k]];
+      if (!C.keep) C.keep = new Uint32Array(64000);
+      C.keep.set(px);
+    };
+    return C;
   }
-  function slimeChunk(c) {
-    if (c < 0 || c * SL.chunkN >= SL.n) return null;
-    const e = SL.cache.get(c);
-    if (e) return e;
-    if (!SL.pending.has(c)) { SL.pending.add(c); slimeDecode(c); }
-    return null;
-  }
-  function initSlime() { slimeLoad(); resetStars(0); }
-  function drawSlime(t) {
-    if (SL.state !== 2) { clear(0); return; }
-    const f = Math.min(SL.n - 1, Math.max(0, Math.floor(t * 70))), c = (f / SL.chunkN) | 0, e = slimeChunk(c);
-    slimeChunk(c + 1);
-    if (!e) { if (SL.keep) px.set(SL.keep); else clear(0); return; }
-    const i = f - c * SL.chunkN, pal = new Uint32Array(256);
-    for (let q = 0; q < 256; q++) pal[q] = fracDACto32(e.pal[i * 768 + q * 3], e.pal[i * 768 + q * 3 + 1], e.pal[i * 768 + q * 3 + 2]);
-    const fr = e.fr.subarray(i * 64000, (i + 1) * 64000);
-    for (let k = 0; k < 64000; k++) px[k] = pal[fr[k]];
-    if (!SL.keep) SL.keep = new Uint32Array(64000);
-    SL.keep.set(px);
-  }
+  const SLIME = frameClip("assets/orig/slime_frames.bin"), TUNNEL = frameClip("assets/orig/tunnel_frames.bin");
+  function initSlime() { SLIME.load(); resetStars(0); }
+  function initTunnel() { TUNNEL.load(); resetStars(0); }
+  function drawSlime(t) { SLIME.draw(t); }
+  function drawTunnel(t) { TUNNEL.draw(t); }
   function initCube() { titleLoad(); cubeLoad(); resetStars(0); }
   function drawCube(t) { if (t < TITLE_T) drawTitle(t); else draw3dFrame(Math.floor((t - TITLE_T) * 70)); }
 
@@ -697,6 +706,7 @@
     else if (name === "cube") initCube();
     else if (name === "fractal") initFractal();
     else if (name === "slime") initSlime();
+    else if (name === "tunnel") initTunnel();
     else if (name === "pictures") initPictures();
     else if (name === "earth") initEarth();
     else if (name === "chess") initChess();
@@ -783,7 +793,7 @@
 
   // Scenes the original shows inside a centred 256x133 window: the whole 320x200 frame is scaled by 0.8 x 2/3
   // (measured on the original screenshots; it gives square pixels on a 4:3 screen).
-  const WINDOWED = new Set(["plasma", "fractal", "cube", "slime"]);
+  const WINDOWED = new Set(["plasma", "fractal", "cube", "slime", "tunnel"]);
   const winSrc = new Uint32Array(W * H);
   function presentWindow() {
     winSrc.set(px); px.fill(0xff000000);
@@ -799,6 +809,7 @@
     else if (scene === "cube") drawCube(t);
     else if (scene === "fractal") drawFractal(t, dt);
     else if (scene === "slime") drawSlime(t);
+    else if (scene === "tunnel") drawTunnel(t);
     else if (scene === "pictures") drawPicture(t);
     else if (scene === "earth") drawEarth(t);
     else if (scene === "chess") drawChess(t);
@@ -893,6 +904,7 @@
     else if (k === "0") { buildScene("boot"); e.preventDefault(); }
     else if (k === "4") { buildScene("cube"); e.preventDefault(); }
     else if (k === "5") { buildScene("fractal"); e.preventDefault(); }
+    else if (k === "9") { buildScene("tunnel"); e.preventDefault(); }
     else if (k === "8") { buildScene("slime"); e.preventDefault(); }
     else if (k === "6") { buildScene("earth"); e.preventDefault(); }
     else if (k === "7") { buildScene("chess"); e.preventDefault(); }

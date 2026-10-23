@@ -16,21 +16,23 @@ class Slime(Cube):
     def __init__(self):
         self.mu = mu = Uc(UC_ARCH_X86, UC_MODE_16)
         mu.mem_map(0, 0x400000); mu.mem_write(BASE, IMG)
-        self.heap = 0x6300; self.calls = collections.Counter(); self.flip_hit = False
+        self.shrink64k = True; self.heap = 0x6300; self.calls = collections.Counter(); self.flip_hit = False
         self.exe = open(os.path.join(HERE, '..', 'CD2.EXE'), 'rb'); self.handles = {}; self.next_h = 5
         self.log = []
         for (seg, ip), fn in (((0x3d0d, 0x1631), self._getmem), ((0x3d0d, 0x14df), self._freemem), ((0x3d0d, 0x17c7), self._memavail),
                               ((0x3d0d, 0x3475), self._flip), ((0x3d0d, 0x3433), self._frame), ((0x3d0d, 0xaa0), self._alias), ((0x3d0d, 0x22c2), self._rterr), ((0x3d0d, 0x20bf), self._dos)):
             a = lin(seg, ip); mu.hook_add(UC_HOOK_CODE, (lambda f: lambda m, ad, sz, u: f(m))(fn), None, a, a)
     def alloc(self, nbytes):
-        if nbytes >= 0xFFF0: nbytes = 0x6000            # the 64 KB I/O block of the file layer: only a part is ever used, and the heap is tight (1 MB real mode)
+        if nbytes >= 0xFFF0 and self.shrink64k: nbytes = 0x6000            # the 64 KB I/O block of the file layer: only a part is ever used, and the heap is tight (1 MB real mode)
         seg = self.heap; self.heap += (nbytes + 15) // 16 + 1
         assert self.heap <= 0x10000, 'heap exhausted'
         return seg
     def _flip(self, mu): self._ret_far(mu, 2)
     def _alias(self, mu):                                              # CodeAlias(seg, var alias: word): real mode needs no alias
         poff, pseg, seg = self._args(mu, 3); self.w16(pseg, poff, seg); self._ret_far(mu, 6)
-    def _rterr(self, mu): raise RuntimeError('RTL error %d' % self._args(mu, 1)[0])
+    def _rterr(self, mu):
+        sp = mu.reg_read(UC_X86_REG_SP); ss = mu.reg_read(UC_X86_REG_SS); ip, cs = struct.unpack('<HH', bytes(mu.mem_read(lin(ss, sp), 4)))
+        raise RuntimeError('RTL error %d called from image %#x' % (self._args(mu, 1)[0], lin(cs, ip) - BASE))
     def _frame(self, mu): self.flip_hit = True; self._ret_far(mu, 0)
     def _dos(self, mu):                                                # Intr(intno, var regs: TRegisters) of the RTL: do the DOS call on host files
         regs, rseg, intno = self._args(mu, 3)
@@ -53,14 +55,15 @@ class Slime(Cube):
         W(9, (R(9) & ~1) | carry)
         self._ret_far(mu, 6)
 
-def init_files(c):
+def init_files(c, bufsize=0x200):
     """what the program start-up gives the file layer: a DOS-visible buffer for names, and the archive's FileRec (name at +0x30)"""
-    buf = c.alloc(0x200); c.mu.mem_write(DS * 16 + 0xebe4, struct.pack('<HHHH', 0, buf, 0, buf))
+    buf = c.alloc(bufsize)                    # must hold the largest single read (the tunnel world reads 6464 bytes at once)
+    c.mu.mem_write(DS * 16 + 0xebe4, struct.pack('<HHHH', 0, buf, 0, buf))
     c.mu.mem_write(DS * 16 + 0xec36, bytes([0x80]) + bytes(0x2f) + b'CD2.EXE\0')
     c.set_ds16(0x6654, 0)
 
 def call(c, ip, limit=500_000_000, stop=None, cs=None):
-    mu = c.mu; sp = 0x4000
+    mu = c.mu; sp = 0xA000
     for w in (0x1000, 0xBEEF): sp -= 2; c.w16(SS, sp, w)
     mu.reg_write(UC_X86_REG_SS, SS); mu.reg_write(UC_X86_REG_SP, sp); mu.reg_write(UC_X86_REG_BP, 0xFF00); mu.reg_write(UC_X86_REG_DS, DS); mu.reg_write(UC_X86_REG_ES, DS)
     c.run_until(cs or CS, ip, 0x1000, 0xBEEF, count=limit)
@@ -78,7 +81,7 @@ def record(nframes, tick_hz=50.0, fps=70.0, per_frame_limit=200_000_000):
     call_args = dict(limit=per_frame_limit)
     call(c, 0x34c7, cs=0x2612)                               # vector-engine unit init: object buffers, Sintab.raw
     call(c, 0x911)                                           # loader: code alias, random table, shd_cube.tvo
-    sp = 0x4000
+    sp = 0xA000
     for w in (0x1000, 0xBEEF): sp -= 2; c.w16(SS, sp, w)
     mu.reg_write(UC_X86_REG_SS, SS); mu.reg_write(UC_X86_REG_SP, sp); mu.reg_write(UC_X86_REG_BP, 0xFF00); mu.reg_write(UC_X86_REG_DS, DS); mu.reg_write(UC_X86_REG_ES, DS)
     F = []; P = []; T = []; pos = (CS, 0x85c); f0 = [None]
