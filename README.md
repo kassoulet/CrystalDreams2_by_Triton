@@ -62,3 +62,7 @@ The Information page prints private home addresses and phone numbers; they are
 left out of the site.
 
 The decoded assets in `assets/orig/` are Triton's original work, kept here with the EXE for preservation and research.
+
+## Deployment
+
+`.github/workflows/pages.yml` checks the JavaScript and Python syntax and publishes the static site (`index.html`, `css/`, `js/`, `assets/`; not `tools/` or `CD2.EXE`) to GitHub Pages on every push to `main`. Enable it once under Settings → Pages → Source: GitHub Actions.
