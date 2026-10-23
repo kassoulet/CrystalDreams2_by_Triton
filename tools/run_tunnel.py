@@ -15,6 +15,8 @@ P0, P1 = 0xA000, 0xA400
 class Tunnel(S.Slime):
     def __init__(self):
         super().__init__()
+        self.sp0 = 0xA000                                     # stack top inside SS (the SS window is kept out of the heap here; the slime run keeps it low)
+        self.fl = [[0x0050, 0x1000], [0x6E30, 0xA000], [0xB000, 0x10000]]; self.blocks = {}      # free list: the heap must stay out of the VGA window A000h..AFFFh
         self.heap = 0x6E30                                    # the engine addresses its tables as SS:xxxx (SS = DS in the original): keep the whole 64 KB window of SS (5E20h..6E1Fh) out of the heap
         self.vga = VGA(); self.vga_toggle = 0; mu = self.mu; self.dac = bytearray(768); self.dac_i = 0
         mu.hook_add(UC_HOOK_INSN, self._in, None, 1, 0, UC_X86_INS_IN)
@@ -36,6 +38,10 @@ class Tunnel(S.Slime):
         if port == 0x3c8: self.dac_i = (val & 255) * 3
         elif port == 0x3c9: self.dac[self.dac_i % 768] = val & 63; self.dac_i += 1
         else: super()._out(mu, port, size, val, ud)
+    def _vw(self, mu, access, addr, size, val, ud):
+        if not self.vga.seq[4] & 8: super()._vw(mu, access, addr, size, val, ud)      # chain-4 (mode 13h, 'chunky'): plain memory, no plane model
+    def _vr(self, mu, access, addr, size, val, ud):
+        if not self.vga.seq[4] & 8: super()._vr(mu, access, addr, size, val, ud)
     def _frame(self, mu): self._upload(); self.flip_hit = True; self.flip_arg = None; self._ret_far(mu, 0)
     def _flip(self, mu): self._upload(); self.flip_hit = True; self.flip_arg = self._args(mu, 1)[0]; self._ret_far(mu, 2)
 
@@ -60,7 +66,7 @@ def record(nframes, tick_hz=50.0, fps=70.0, per_frame_limit=200_000_000):
     S.call(c, 0x34c7, cs=0x2612)                                        # vector-engine init called by the main program before the scenes
     S.call(c, 0x6c7, cs=CS)                                             # world loader (nfly2.tvw)
     print('world at', hex(c.ds16(0x8bde)), 'log', c.log, flush=True)
-    sp = 0xA000
+    sp = c.sp0
     for w in (0x1000, 0xBEEF): sp -= 2; c.w16(SS, sp, w)
     mu.reg_write(UC_X86_REG_SS, SS); mu.reg_write(UC_X86_REG_SP, sp); mu.reg_write(UC_X86_REG_BP, 0xFF00); mu.reg_write(UC_X86_REG_DS, DS); mu.reg_write(UC_X86_REG_ES, DS)
     F = []; P = []; T = []; A = []; pos = (CS, 0x2f2); f0 = [None]

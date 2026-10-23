@@ -16,17 +16,35 @@ class Slime(Cube):
     def __init__(self):
         self.mu = mu = Uc(UC_ARCH_X86, UC_MODE_16)
         mu.mem_map(0, 0x400000); mu.mem_write(BASE, IMG)
-        self.shrink64k = True; self.heap = 0x6300; self.calls = collections.Counter(); self.flip_hit = False
+        self.sp0 = 0x4000; self.shrink64k = True; self.cap64k = 0x6000; self.heap = 0x6300; self.calls = collections.Counter(); self.flip_hit = False
         self.exe = open(os.path.join(HERE, '..', 'CD2.EXE'), 'rb'); self.handles = {}; self.next_h = 5
         self.log = []
         for (seg, ip), fn in (((0x3d0d, 0x1631), self._getmem), ((0x3d0d, 0x14df), self._freemem), ((0x3d0d, 0x17c7), self._memavail),
                               ((0x3d0d, 0x3475), self._flip), ((0x3d0d, 0x3433), self._frame), ((0x3d0d, 0xaa0), self._alias), ((0x3d0d, 0x22c2), self._rterr), ((0x3d0d, 0x20bf), self._dos)):
             a = lin(seg, ip); mu.hook_add(UC_HOOK_CODE, (lambda f: lambda m, ad, sz, u: f(m))(fn), None, a, a)
     def alloc(self, nbytes):
-        if nbytes >= 0xFFF0 and self.shrink64k: nbytes = 0x6000            # the 64 KB I/O block of the file layer: only a part is ever used, and the heap is tight (1 MB real mode)
-        seg = self.heap; self.heap += (nbytes + 15) // 16 + 1
-        assert self.heap <= 0x10000, 'heap exhausted'
-        return seg
+        if nbytes >= 0xFFF0 and self.shrink64k: nbytes = self.cap64k          # the 64 KB I/O block of the file layer: only a part is ever used, and the heap is tight (1 MB real mode)
+        if not hasattr(self, 'fl'): self.fl = [[self.heap, 0x10000]]; self.blocks = {}
+        need = (nbytes + 15) // 16 + 1
+        for iv in self.fl:                                                   # first fit in the free list (FreeMem returns blocks: earth/chess load and drop big temporaries)
+            if iv[1] - iv[0] >= need:
+                seg = iv[0]; iv[0] += need; self.blocks[seg] = need; self.heap = max(self.heap, iv[0]); return seg
+        raise AssertionError('heap exhausted (need %#x paragraphs, free list %s)' % (need, [(hex(a), hex(b)) for a, b in self.fl]))
+    def free(self, seg):
+        n = self.blocks.pop(seg, None)
+        if n is None: return
+        self.fl.append([seg, seg + n]); self.fl.sort()
+        m = [self.fl[0]]
+        for a, b in self.fl[1:]:
+            if a <= m[-1][1]: m[-1][1] = max(m[-1][1], b)
+            else: m.append([a, b])
+        self.fl = m
+    def _freemem(self, mu):
+        poff, pseg = self._args(mu, 2)
+        seg = self.r16(pseg, poff + 2)
+        if hasattr(self, 'fl'): self.free(seg)
+        self.w16(pseg, poff, 0); self.w16(pseg, poff + 2, 0)
+        self._ret_far(mu, 4)
     def _flip(self, mu): self._ret_far(mu, 2)
     def _alias(self, mu):                                              # CodeAlias(seg, var alias: word): real mode needs no alias
         poff, pseg, seg = self._args(mu, 3); self.w16(pseg, poff, seg); self._ret_far(mu, 6)
@@ -63,7 +81,7 @@ def init_files(c, bufsize=0x200):
     c.set_ds16(0x6654, 0)
 
 def call(c, ip, limit=500_000_000, stop=None, cs=None):
-    mu = c.mu; sp = 0xA000
+    mu = c.mu; sp = c.sp0
     for w in (0x1000, 0xBEEF): sp -= 2; c.w16(SS, sp, w)
     mu.reg_write(UC_X86_REG_SS, SS); mu.reg_write(UC_X86_REG_SP, sp); mu.reg_write(UC_X86_REG_BP, 0xFF00); mu.reg_write(UC_X86_REG_DS, DS); mu.reg_write(UC_X86_REG_ES, DS)
     pos = (cs or CS, ip)
@@ -85,7 +103,7 @@ def record(nframes, tick_hz=50.0, fps=70.0, per_frame_limit=200_000_000):
     call_args = dict(limit=per_frame_limit)
     call(c, 0x34c7, cs=0x2612)                               # vector-engine unit init: object buffers, Sintab.raw
     call(c, 0x911)                                           # loader: code alias, random table, shd_cube.tvo
-    sp = 0xA000
+    sp = c.sp0
     for w in (0x1000, 0xBEEF): sp -= 2; c.w16(SS, sp, w)
     mu.reg_write(UC_X86_REG_SS, SS); mu.reg_write(UC_X86_REG_SP, sp); mu.reg_write(UC_X86_REG_BP, 0xFF00); mu.reg_write(UC_X86_REG_DS, DS); mu.reg_write(UC_X86_REG_ES, DS)
     F = []; P = []; T = []; pos = (CS, 0x85c); f0 = [None]

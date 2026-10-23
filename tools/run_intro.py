@@ -9,7 +9,7 @@ import run_slime as S, run_tunnel as T
 from run_slime import lin, DS, SS, BASE, IMG
 
 def setup():
-    c = T.Tunnel(); mu = c.mu; c.shrink64k = False
+    c = T.Tunnel(); mu = c.mu; c.shrink64k = os.environ.get('SHRINK64K') == '1'; c.cap64k = 0xA000        # the polygon filler's code buffer needs 0x9E5B bytes of the 64 KB block
     import run_title
     fseg = c.alloc(32000); mu.mem_write(lin(fseg, 0), run_title.font_planes(open(os.environ['CD2_FONT'], 'rb').read()))
     c.set_ds16(0xced8, fseg); c.set_ds16(0xced4, 0x2598)
@@ -23,7 +23,7 @@ def setup():
 def record(nframes, tick_hz=50.0, fps=70.0, per_frame_limit=100_000_000):
     c = setup(); mu = c.mu
     S.call(c, 0x1d50, cs=0x1bee)                                       # intro init: buffers, the four pictures
-    sp = 0xA000
+    sp = c.sp0
     for w in (0x1000, 0xBEEF): sp -= 2; c.w16(SS, sp, w)
     mu.reg_write(UC_X86_REG_SS, SS); mu.reg_write(UC_X86_REG_SP, sp); mu.reg_write(UC_X86_REG_BP, 0xFF00); mu.reg_write(UC_X86_REG_DS, DS); mu.reg_write(UC_X86_REG_ES, DS)
     F = []; P = []; T_ = []; A = []; pos = (0x1bee, 0x1d0c)

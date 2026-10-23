@@ -922,7 +922,7 @@
         <h3>My look-alikes</h3>
         <ul>
           <li>The cube is a replay, not a port: the engine (slab, apexes, intersection, star field) is not reimplemented, so it cannot be changed or run at another resolution. The scene’s music clock is assumed to tick at 50 Hz and the frame rate at 70 fps; the objects are constants inside the code, not <code>SHD_Cube.TVO</code></li>
-          <li>The intro replay is the least certain: it needs the VGA write modes, latch copies and a DAC to be exact, I have no capture of the original intro to compare with, and the speckle of short vertical dashes over the first scenes may be original or a modelling error. Its page selectors (eight 8 KB pages from A000h) are my reading of the code. Treat it as a good approximation, not a verified frame sequence</li>
+          <li>The intro replay is less certain than the others: it needs the VGA write modes, latch copies and a DAC to be exact, I have no capture of the original intro to compare with, and the short vertical dashes over the first scenes are the original’s starfield (confirmed from memory of the demo, not from a capture). Its page selectors (eight 8 KB pages from A000h) are my reading of the code. Treat it as a good approximation, not a verified frame sequence</li>
           <li>Vectorslime is a replay too, and shown in the same 256×133 window as the other effect scenes without evidence for that either way (I have no capture of it). Its initial rotation angles come from uninitialised stack in the original; I used zeros. The 120×100 slime buffers start empty, and the tick rate (50 Hz) and frame rate (70 fps) are assumed, as for the cube. Running both under emulation needed workarounds: the demo’s hard-coded video selector 30h, a 64 KB file buffer that did not fit in 1 MB, and the DOS calls of its file layer</li>
           <li>The plasma’s 256 × 133 viewport is inferred from the original screenshots, and its length assumes the music player ticks at 50 Hz (the scene waits for 512 ticks)</li>
           <li>The fractal’s 70 Hz step rate is an assumption (the loop waits on a retrace counter whose rate I did not determine)</li>
@@ -936,7 +936,7 @@
         <h3>Not reproduced</h3>
         <ul>
           <li>The setup screen’s hardware detection and the intro’s performance tester</li>
-          <li>Spacecut and the vector scroller (not rebuilt)</li>
+          <li>Spacecut and the vector scroller (not rebuilt). I also tried to replay Earth and the chessboard from the original procedures the way the slime and tunnel were done: they need about 600 KB of models and textures at once plus a 640 KB picture unit, more than a 1 MB real-mode heap can hold, so those two scenes stay my own port of the original models</li>
           <li>The information viewer’s scrolling pages (they are shown, as text and images, in “In their own words”)</li>
           <li>Sound Blaster and Gravis Ultrasound initialisation, and the exact mixer</li>
         </ul>
