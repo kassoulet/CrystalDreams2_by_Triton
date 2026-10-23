@@ -886,6 +886,7 @@
         <button data-scene="plasma" class="sc">Plasma</button>
         <button data-scene="cube" class="sc">Cube</button>
         <button data-scene="fractal" class="sc">Fractal</button>
+        <button data-scene="slime" class="sc">Slime</button>
         <button data-scene="pictures" class="sc">Pictures</button>
         <button data-scene="earth" class="sc">Earth</button>
         <button data-scene="chess" class="sc">Chess</button>
@@ -893,7 +894,7 @@
       </div>
 
       <div class="player-foot">
-        <p><strong>Keys:</strong> <kbd>1</kbd>–<kbd>3</kbd> original start modes (plasma / pictures / endpart) · <kbd>0</kbd> boot · <kbd>4</kbd> cube · <kbd>5</kbd> fractal · <kbd>6</kbd> earth · <kbd>7</kbd> chess · <kbd>L</kbd> loop · <kbd>←</kbd>/<kbd>→</kbd> seek ±5 s · <kbd>Space</kbd> pause · <kbd>M</kbd> mute</p>
+        <p><strong>Keys:</strong> <kbd>1</kbd>–<kbd>3</kbd> original start modes (plasma / pictures / endpart) · <kbd>0</kbd> boot · <kbd>4</kbd> cube · <kbd>5</kbd> fractal · <kbd>6</kbd> earth · <kbd>7</kbd> chess · <kbd>8</kbd> slime · <kbd>L</kbd> loop · <kbd>←</kbd>/<kbd>→</kbd> seek ±5 s · <kbd>Space</kbd> pause · <kbd>M</kbd> mute</p>
         <p class="fine">The Pictures and Endpart scenes show the original images decoded from CD2.EXE; the music is the original .MOD files. The cube is a replay of recorded frames, not a port of the engine.</p>
       </div>
     </div>
@@ -906,6 +907,7 @@
           <li>Earth: the original 264-polygon sphere (<code>Earth3.TVO</code>) with the original map texture</li>
           <li>Chessboard: the original piece and board models, the original marble texture, one moving light</li>
           <li>Cube: the title card is rendered by the original text routine with the original font, palette and fade timeline; the 3D part is every frame (2,382, about 34 s) of the scene’s own loop (image 0xB41D) executed under emulation with a small VGA model (write modes 0–3, set/reset, latches, colour compare). Frames and per-frame palette are stored delta + deflate (2 MB) and decoded on demand</li>
+          <li>Vectorslime: all 1,136 frames (about 16 s) of the scene procedure (image 0x248b) running under emulation. It loads <code>SHD_Cube.TVO</code> through the demo’s own archive reader, renders the rotating object into a small 120×100 buffer, and rebuilds each screen from 40 earlier buffers picked by sine tables (the authors: “the drawing of the current frame uses previously drawn frames”). The title is the original text routine, and the fades and corner ornaments are the scene’s own</li>
           <li>Plasma: the original table, frame renderer, palette routine and phase motion, ported and checked against the routines running under emulation</li>
           <li>Fractal zoom: the original MegaFrac data, the original scaler’s pixel map (verified pixel-exact against the routine running under emulation), the original sine-wave palette and zoom schedule</li>
           <li>Music: the four original .MOD files, mixed in the browser; Auto follows the Credits page (Vogue for intro to fractal, LizardKing for chess and endpart)</li>
@@ -916,6 +918,7 @@
         <h3>My look-alikes</h3>
         <ul>
           <li>The cube is a replay, not a port: the engine (slab, apexes, intersection, star field) is not reimplemented, so it cannot be changed or run at another resolution. The scene’s music clock is assumed to tick at 50 Hz and the frame rate at 70 fps; the objects are constants inside the code, not <code>SHD_Cube.TVO</code></li>
+          <li>Vectorslime is a replay too, and shown in the same 256×133 window as the other effect scenes without evidence for that either way (I have no capture of it). Its initial rotation angles come from uninitialised stack in the original; I used zeros. The 120×100 slime buffers start empty, and the tick rate (50 Hz) and frame rate (70 fps) are assumed, as for the cube. Running it under emulation needed three workarounds: the demo’s hard-coded video selector 30h, a 64 KB file buffer that did not fit in 1 MB, and the DOS calls of its file layer</li>
           <li>The plasma’s 256 × 133 viewport is inferred from the original screenshots, and its length assumes the music player ticks at 50 Hz (the scene waits for 512 ticks)</li>
           <li>The fractal’s 70 Hz step rate is an assumption (the loop waits on a retrace counter whose rate I did not determine)</li>
           <li>The chessboard is a 4×4 board (the board model has 16 top squares and the pieces are 82% of a square). Piece placement is mine, the pieces are not animated, and there is no bishop model in the file</li>
@@ -928,7 +931,7 @@
         <h3>Not reproduced</h3>
         <ul>
           <li>The setup screen’s hardware detection and the intro’s performance tester</li>
-          <li>Spacecut, vector scroller, vectorslime and tunnel flight (the data for the latter two is in the archive; the effects are not rebuilt)</li>
+          <li>Spacecut and vector scroller, and tunnel flight (the data for tunnel flight is in the archive; the effects are not rebuilt)</li>
           <li>The information viewer’s scrolling pages (they are shown, as text and images, in “In their own words”)</li>
           <li>Sound Blaster and Gravis Ultrasound initialisation, and the exact mixer</li>
         </ul>
